@@ -2,7 +2,7 @@ from ursina import *
 from ursina.prefabs.first_person_controller import FirstPersonController
 from ursina.shaders import lit_with_shadows_shader
 from enum import Enum
-from math import radians
+from math import radians, sin, cos
 
 app = Ursina()
 
@@ -19,6 +19,9 @@ editor_camera = EditorCamera(enabled=False, ignore_paused=True)
 # 玩家控制器
 player = FirstPersonController(model='cube', z=-10, color=color.orange, origin_y=-.5, speed=8, collider='box')
 player.collider = BoxCollider(player, Vec3(0,1,0), Vec3(1,2,1))
+
+# 保存 FirstPersonController 的原始 update 方法
+player.original_update = player.update
 
 # 可射击对象父节点
 shootables_parent = Entity()
@@ -150,20 +153,34 @@ class CameraController(Entity):
     def set_first_person(self):
         """设置为第一人称"""
         self.mode = CameraMode.FIRST_PERSON
+
+        # 恢复 FirstPersonController 的原始 update 方法
+        player.update = player.original_update
+
+        # 先隐藏玩家
         player.visible = False
-        gun.enabled = True
 
-        # 将枪从玩家移回相机
-        gun.parent = camera
-        gun.position = (.5, -.25, .25)
-        gun.rotation = (0, 0, 0)
+        # 恢复 camera_pivot 的位置到头部（FPS 模式需要）
+        player.camera_pivot.y = player.height
 
-        # 设置相机为 camera_pivot 的子对象（这是 FirstPersonController 的正确做法）
+        # 先设置相机的父对象和位置
         camera.parent = player.camera_pivot
-        camera.position = (0, 0, 0)
+        camera.position = Vec3(0, 0, 0)
+        # 恢复保存的相机旋转
+        camera.rotation = Vec3(0, 0, 0)
+        # 设置 camera_pivot 的 x 旋转（俯仰角）
+        player.camera_pivot.rotation_x = self.fps_camera_rotation.x
 
-        # 恢复保存的相机旋转（只恢复 x，y 由 player 控制旋转）
-        camera.rotation_x = self.fps_camera_rotation.x
+        # 然后将枪从玩家移到场景中，定位到相机前方
+        gun.parent = scene
+        gun.position = camera.world_position + camera.forward * 0.25 + camera.right * 0.5 + camera.up * -0.25
+        gun.rotation = (0, camera.rotation_y, 0)
+        gun.scale = Vec3(.3, .2, 1)
+        gun.origin_z = -0.5
+        gun.enabled = True
+        gun.visible = True
+        gun.always_on_top = False
+        gun.shader = None
 
         camera.animate('fov', self.fov[CameraMode.FIRST_PERSON], duration=0.3)
 
@@ -174,6 +191,9 @@ class CameraController(Entity):
             player.cursor.enabled = True
         mouse.locked = True
 
+        # 恢复 FPS 模式下的鼠标控制玩家旋转
+        player.mouse_sensitivity = (40, 40)
+
         # 隐藏 TPS 特有元素
         ground_crosshair.enabled = False
 
@@ -181,18 +201,33 @@ class CameraController(Entity):
         """设置为第三人称"""
         self.mode = CameraMode.THIRD_PERSON
 
+        # 替换 FirstPersonController 的 update 方法为空方法，禁用其逻辑
+        player.update = lambda: None
+
         # 保存当前的相机旋转（FPS 模式下）
-        self.fps_camera_rotation = Vec3(camera.rotation_x, player.rotation_y, camera.rotation_z)
+        self.fps_camera_rotation = Vec3(player.camera_pivot.rotation_x, player.rotation_y, camera.rotation_z)
+
+        # 将 camera_pivot 的位置调整到玩家 body 中心（TPS 模式绕 body 中心旋转）
+        player.camera_pivot.y = 0
 
         player.visible = True
 
-        # 将枪从相机移到玩家身上
+        # 将枪放在场景中，定位到玩家身上（与 FPS 模式一致的位置和尺寸）
         gun.parent = player
-        gun.position = (0.3, 0.8, 0.2)
+        gun.position = (0.5, 0.5, 0.25)
         gun.rotation = (0, 0, 0)
+        gun.scale = Vec3(.3, .2, 1)
+        gun.origin_z = -0.5
+        gun.visible = True
 
+        # 将相机设为 scene 的子对象
         camera.parent = scene
-        self.update_camera()
+        # 先更新相机位置
+        target_position = self.target.position + Vec3(0, self.camera_height, -self.camera_distance)
+        camera.position = target_position
+        # 然后设置固定的旋转：30 度俯角，水平朝向正前方
+        look_target = self.target.position + Vec3(0, 1.5, 10)
+        camera.look_at(look_target)
         camera.animate('fov', self.fov[CameraMode.THIRD_PERSON], duration=0.3)
 
         view_mode_text.text = 'View: TPS'
@@ -202,13 +237,26 @@ class CameraController(Entity):
             player.cursor.enabled = False
         mouse.locked = False
 
+        # 禁用 TPS 模式下的鼠标控制玩家旋转
+        player.mouse_sensitivity = (0, 0)
+
         # 显示 TPS 特有元素
         ground_crosshair.enabled = True
 
     def update(self):
         """每帧更新"""
-        if self.mode == CameraMode.THIRD_PERSON:
+        if self.mode == CameraMode.FIRST_PERSON:
+            # FPS 模式：更新枪的位置跟随相机
+            if gun.parent == scene:
+                gun.position = camera.world_position + camera.forward * 0.25 + camera.right * 0.5 + camera.up * -0.25
+                # 枪跟随相机旋转（包括俯仰）
+                gun.rotation = (player.camera_pivot.rotation_x, player.rotation_y, 0)
+        elif self.mode == CameraMode.THIRD_PERSON:
             self.update_camera()
+            # TPS 模式：更新枪的位置跟随玩家（与 FPS 模式一致）
+            if gun.parent == scene:
+                gun.position = player.position + player.forward * 0.25 + player.right * 0.5 + player.up * -0.25
+                gun.rotation = (0, player.rotation_y, 0)
 
     def update_camera(self):
         """更新第三人称相机位置（固定角度跟随玩家位置）"""
@@ -379,6 +427,11 @@ class Enemy(Entity):
         self.hp = 30
         self.max_hp = 30
 
+        # 碰撞回避状态
+        self.avoiding_collision = False
+        self.avoidance_end_time = 0
+        self.avoidance_direction = 0  # 1 = 右转, -1 = 左转
+
         # 健康条（参考 v2 实现）
         self.health_bar = Entity(
             parent=self,
@@ -393,15 +446,43 @@ class Enemy(Entity):
             destroy(self)
             return
 
+        # 检查是否正在回避碰撞
+        if self.avoiding_collision:
+            if time.time() < self.avoidance_end_time:
+                # 正在回避：继续旋转
+                self.rotation_y += self.avoidance_direction * 90 * time.dt
+                # 移动
+                move_distance = 2 * time.dt
+                ray = raycast(self.position, self.forward, distance=move_distance, ignore=(self,), debug=False)
+                if not ray.hit:
+                    self.position += self.forward * move_distance
+            else:
+                # 回避结束
+                self.avoiding_collision = False
+            return
+
         # 简单 AI：向玩家移动
         dist = distance(self.position, player.position)
         if dist > 2:
             self.look_at_2d(player.position, 'y')
             # 使用 raycast 检测碰撞（包括其他敌人、墙壁、玩家）
             move_distance = 2 * time.dt
-            ray = raycast(self.position, self.forward, distance=move_distance, ignore=(self,))
-            if not ray.hit:
-                self.position += self.forward * move_distance
+            # 检查是否与其他敌人碰撞
+            hit_enemy = False
+            for enemy in enemies:
+                if enemy != self and enemy.hp > 0:
+                    enemy_dist = distance(self.position, enemy.position)
+                    if enemy_dist < 1.5:  # 敌人碰撞距离
+                        hit_enemy = True
+                        # 开始回避：随机选择转向方向
+                        self.avoiding_collision = True
+                        self.avoidance_end_time = time.time() + 2.0  # 2 秒
+                        self.avoidance_direction = 1 if random.random() > 0.5 else -1
+                        break
+            if not hit_enemy:
+                ray = raycast(self.position, self.forward, distance=move_distance, ignore=(self,), debug=False)
+                if not ray.hit:
+                    self.position += self.forward * move_distance
 
         # 更新健康条
         self.health_bar.world_scale_x = self.hp / self.max_hp * 1.5
