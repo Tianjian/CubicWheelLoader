@@ -21,12 +21,12 @@ class Base(Entity):
             model='circle', scale=6, y=0.05,
             color=base_color, alpha=0.3
         )
-        # 基地柱子
+        # 基地柱子（纯装饰，无碰撞体）
         for dx, dz in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
             Entity(
                 model='cube', scale=(0.5, 5, 0.5),
                 position=pos + Vec3(dx, 0, dz),
-                color=base_color, collider='box'
+                color=base_color
             )
         # 顶部横梁
         Entity(

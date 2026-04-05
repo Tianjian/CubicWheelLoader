@@ -36,10 +36,10 @@ class GameManager(Entity):
         blue_spawn = Vec3(Config.BLUE_BASE_POS)
 
         self.players = [
-            Player(player_id=1, team=Team.RED, spawn_position=red_spawn + Vec3(-3, 0, 0)),
-            Player(player_id=2, team=Team.RED, spawn_position=red_spawn + Vec3(3, 0, 0)),
-            Player(player_id=3, team=Team.BLUE, spawn_position=blue_spawn + Vec3(-3, 0, 0)),
-            Player(player_id=4, team=Team.BLUE, spawn_position=blue_spawn + Vec3(3, 0, 0)),
+            Player(player_id=1, team=Team.RED, spawn_position=red_spawn + Vec3(-2, 0, 0)),
+            Player(player_id=2, team=Team.RED, spawn_position=red_spawn + Vec3(2, 0, 0)),
+            Player(player_id=3, team=Team.BLUE, spawn_position=blue_spawn + Vec3(-2, 0, 0)),
+            Player(player_id=4, team=Team.BLUE, spawn_position=blue_spawn + Vec3(2, 0, 0)),
         ]
 
         # 分配控制器

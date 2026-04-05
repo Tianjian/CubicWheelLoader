@@ -134,6 +134,7 @@ class Player(Entity):
         """结束无敌状态"""
         self.invincible = False
         self.state = PlayerState.ALIVE
+        self.visible = True
         self.color = self.original_color
         self.weapon.color = self.original_color
 

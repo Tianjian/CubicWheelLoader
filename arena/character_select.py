@@ -71,7 +71,7 @@ class CharacterSelect:
         """选择角色"""
         self.selected_id = idx
         for i, card in enumerate(self.cards):
-            card.highlight = Color(255, 255, 0, 100) if i == idx else Color.clear
+            card.highlight = color.yellow.tint(-.5) if i == idx else color.clear
         self.start_btn.enabled = True
 
     def _start_match(self):

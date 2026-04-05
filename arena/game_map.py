@@ -1,6 +1,6 @@
 from ursina import *
 import random
-from arena.constants import Config
+from arena.constants import Config, Team
 from arena.base import Base
 
 
@@ -15,8 +15,8 @@ class GameMap:
         )
 
         # 红蓝基地
-        self.red_base = Base(team='red', position=Config.RED_BASE_POS)
-        self.blue_base = Base(team='blue', position=Config.BLUE_BASE_POS)
+        self.red_base = Base(team=Team.RED, position=Config.RED_BASE_POS)
+        self.blue_base = Base(team=Team.BLUE, position=Config.BLUE_BASE_POS)
 
         # 掩体
         self._generate_cover()
@@ -34,9 +34,9 @@ class GameMap:
             (-5, 0, 0), (5, 0, 0),
             # 中场
             (-8, 0, -5), (8, 0, 5),
-            # 基地前沿
-            (-4, 0, -18), (4, 0, -18),
-            (-4, 0, 18), (4, 0, 18),
+            # 基地前沿（与基地保持安全距离）
+            (-6, 0, -14), (6, 0, -14),
+            (-6, 0, 14), (6, 0, 14),
         ]
         self.walls = []
         for x, y, z in cover_positions:

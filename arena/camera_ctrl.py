@@ -10,6 +10,7 @@ class CameraController(Entity):
         self.target = target_entity
         self.mode = CameraMode.THIRD_PERSON
         self.is_far = False  # 近/远视角
+        self.active = True    # 是否启用跟随
 
         # TPS 参数
         self.camera_distance = Config.CAMERA_DISTANCE
@@ -36,23 +37,31 @@ class CameraController(Entity):
 
     def set_spectator(self):
         """切换为旁观模式（玩家死亡时）"""
+        self.active = False  # 禁用跟随，防止 lerp 抖动
         camera.parent = scene
         camera.position = Vec3(0, 40, 0)
-        camera.look_at(Vec3(0, 0, 0))
+        camera.rotation = Vec3(90, 0, 0)  # 俯视：直接设旋转，不用 look_at
         camera.animate('fov', 45, duration=0.5)
 
     def set_third_person(self):
         """恢复 TPS 视角"""
         camera.parent = scene
+        # 一次性设置位置和旋转，避免 lerp 过渡期间 look_at 倾斜
         target_position = self.target.position + Vec3(0, self.camera_height, -self.camera_distance)
         camera.position = target_position
         look_target = self.target.position + Vec3(0, 1.5, 10)
         camera.look_at(look_target)
         camera.animate('fov', self.fov, duration=0.3)
+        # 延迟一帧后再启用跟随，确保位置和旋转已稳定
+        invoke(self._enable_follow, delay=0.3)
+
+    def _enable_follow(self):
+        """启用相机跟随"""
+        self.active = True
 
     def update(self):
         """每帧更新"""
-        if self.mode == CameraMode.THIRD_PERSON and self.target:
+        if self.active and self.mode == CameraMode.THIRD_PERSON and self.target:
             self._update_camera()
 
     def _update_camera(self):

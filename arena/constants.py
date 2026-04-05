@@ -41,8 +41,8 @@ class Config:
 
     # 地图
     MAP_SIZE = 64
-    RED_BASE_POS = (0, 0, -28)
-    BLUE_BASE_POS = (0, 0, 28)
+    RED_BASE_POS = (0, 0, -24)
+    BLUE_BASE_POS = (0, 0, 24)
 
     # 人类玩家
     HUMAN_MOVE_SPEED = 8
@@ -55,11 +55,11 @@ class Config:
     AI_ATTACK_RANGE = 25
     AI_SHOOT_SPREAD = 0.05
 
-    # 相机（TPS）
-    CAMERA_DISTANCE = 15
-    CAMERA_HEIGHT = 8
-    CAMERA_FOV_TPS = 55
-    CAMERA_FOV_FAR = 30
-    CAMERA_TRANSITION_SPEED = 15
+    # 相机（TPS，与 fps_demo_v4 一致）
+    CAMERA_DISTANCE = 40
+    CAMERA_HEIGHT = 15
+    CAMERA_FOV_TPS = 60
+    CAMERA_FOV_FAR = 45
+    CAMERA_TRANSITION_SPEED = 10
 
     TEAM_COLORS = None  # 延迟初始化（需要 ursina.color）
