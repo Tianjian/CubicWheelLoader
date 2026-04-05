@@ -94,7 +94,7 @@ def get_state(controller=0):
 
     # 归一化摇杆，应用死区
     lx = g.thumbLX / MAX_AXIS if abs(g.thumbLX) > STICK_DEADZONE else 0.0
-    ly = -g.thumbLY / MAX_AXIS if abs(g.thumbLY) > STICK_DEADZONE else 0.0
+    ly = g.thumbLY / MAX_AXIS if abs(g.thumbLY) > STICK_DEADZONE else 0.0
     rx = g.thumbRX / MAX_AXIS if abs(g.thumbRX) > STICK_DEADZONE else 0.0
     ry = -g.thumbRY / MAX_AXIS if abs(g.thumbRY) > STICK_DEADZONE else 0.0
 
