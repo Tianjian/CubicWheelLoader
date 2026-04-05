@@ -9,6 +9,7 @@ from arena.score_system import TeamScoreSystem
 from arena.match_timer import MatchTimer
 from arena.kill_feed import kill_feed
 from arena.hud import hud
+from arena.input_manager import InputManager
 
 
 class GameManager(Entity):
@@ -23,10 +24,14 @@ class GameManager(Entity):
         self.timer = MatchTimer()
         self.camera_controller = None
         self.game_map = None
+        self.input_manager = None
 
     def start_match(self, selected_player_id):
         """开始比赛"""
         print(f'Starting match, human controls P{selected_player_id + 1}')
+
+        # 创建输入管理器（统一键盘/手柄）
+        self.input_manager = InputManager()
 
         # 创建地图
         self.game_map = GameMap()
@@ -45,7 +50,7 @@ class GameManager(Entity):
         # 分配控制器
         for i, player in enumerate(self.players):
             if i == selected_player_id:
-                player.controller = HumanController(player)
+                player.controller = HumanController(player, self.input_manager)
                 self.human_player = player
             else:
                 player.controller = AIController(player)
@@ -173,6 +178,11 @@ class GameManager(Entity):
 
     def _restart(self):
         """重新开始"""
+        # 销毁输入管理器
+        if self.input_manager:
+            destroy(self.input_manager)
+            self.input_manager = None
+
         # 清理场景中的玩家实体
         for p in self.players:
             destroy(p)
@@ -193,6 +203,11 @@ class GameManager(Entity):
     def update(self):
         """每帧更新"""
         if self.state == GameState.PLAYING:
+            # 处理瞬时动作（视角切换）
+            if self.input_manager and self.input_manager.action:
+                if self.camera_controller:
+                    self.camera_controller.toggle_distance()
+
             # 更新 HUD
             if self.human_player:
                 hud.update_player_info(self.human_player)

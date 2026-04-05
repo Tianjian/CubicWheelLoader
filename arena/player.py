@@ -116,6 +116,9 @@ class Player(Entity):
 
     def respawn(self):
         """在基地重生"""
+        # 防止实体已被销毁后仍触发重生
+        if not hasattr(self, 'enabled') or not self.enabled:
+            return
         self.hp = self.max_hp
         self.health_bar.world_scale_x = 1.5
         self.health_bar.color = color.green
@@ -132,6 +135,8 @@ class Player(Entity):
 
     def _end_invincibility(self):
         """结束无敌状态"""
+        if not hasattr(self, 'enabled') or not self.enabled:
+            return
         self.invincible = False
         self.state = PlayerState.ALIVE
         self.visible = True

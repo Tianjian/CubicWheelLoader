@@ -28,16 +28,10 @@ class Base(Entity):
                 position=pos + Vec3(dx, 0, dz),
                 color=base_color
             )
-        # 顶部横梁
-        Entity(
-            model='cube', scale=(5, 0.5, 5),
-            position=pos + Vec3(0, 5, 0),
-            color=base_color
-        )
         # 队伍名标签
         Text(
             text=f'{team.value.upper()} BASE',
-            position=pos + Vec3(0, 7, 0),
+            position=pos + Vec3(0, 6, 0),
             origin=(0, 0),
             scale=30,
             color=base_color,

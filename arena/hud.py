@@ -75,9 +75,8 @@ class HUD:
 
         # 操作提示（左下角）
         self.controls_text = Text(
-            text='W/S - Move  A/D - Turn\n'
-                 'LMB - Shoot  V - View\n'
-                 'Tab - Editor',
+            text='Keyboard: WASD-Move  LMB-Shoot  V-View\n'
+                 'Gamepad:  LS-Move  RS-Rotate  LT-Shoot  X-View',
             position=(-0.85, -0.35),
             scale=0.8,
             parent=camera.ui,

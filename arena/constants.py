@@ -62,4 +62,7 @@ class Config:
     CAMERA_FOV_FAR = 45
     CAMERA_TRANSITION_SPEED = 10
 
+    # 手柄
+    GAMEPAD_SHOOT_THRESHOLD = 0.3  # 扳机射击阈值（归一化后 0~1）
+
     TEAM_COLORS = None  # 延迟初始化（需要 ursina.color）
