@@ -1,21 +1,17 @@
 from ursina import *
-from arena.constants import Config, Team
+from arena.constants import Team
 from arena.base import Base
 
 
 class GameMap:
-    """对称竞技地图，从 map_data 构建"""
+    """对称竞技地图，从 map_data 构建（map_data 必须由调用方提供）"""
 
-    def __init__(self, map_data=None):
-        if map_data is None:
-            from arena.map_loader import _default_map
-            map_data = _default_map()
-
+    def __init__(self, map_data):
         self.map_data = map_data
 
         # 地面
         ground_cfg = map_data.get('ground', {})
-        ground_size = ground_cfg.get('size', Config.MAP_SIZE)
+        ground_size = ground_cfg.get('size', 64)
         ground_texture = ground_cfg.get('texture', 'grass')
         ground_tex_scale = tuple(ground_cfg.get('texture_scale', [8, 8]))
 
@@ -29,14 +25,14 @@ class GameMap:
         blue_cfg = map_data.get('blue_base', {})
         self.red_base = Base(
             team=Team.RED,
-            position=red_cfg.get('position', Config.RED_BASE_POS),
+            position=red_cfg.get('position', [0, 0, -24]),
             radius=red_cfg.get('radius', 6),
             pillars=red_cfg.get('pillars'),
             pillar_height=red_cfg.get('pillar_height', 5),
         )
         self.blue_base = Base(
             team=Team.BLUE,
-            position=blue_cfg.get('position', Config.BLUE_BASE_POS),
+            position=blue_cfg.get('position', [0, 0, 24]),
             radius=blue_cfg.get('radius', 6),
             pillars=blue_cfg.get('pillars'),
             pillar_height=blue_cfg.get('pillar_height', 5),

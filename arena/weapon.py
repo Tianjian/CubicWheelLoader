@@ -1,5 +1,6 @@
 from ursina import *
 import random
+from arena.constants import Config
 
 
 class Weapon(Entity):
@@ -43,7 +44,7 @@ class Weapon(Entity):
 
         # 枪口闪光
         self.muzzle_flash.enabled = True
-        invoke(self._hide_muzzle_flash, delay=0.05)
+        invoke(self._hide_muzzle_flash, delay=Config.MUZZLE_FLASH_DURATION)
 
         # 播放射击音效
         self.play_shoot_sound()

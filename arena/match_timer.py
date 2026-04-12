@@ -43,8 +43,8 @@ class MatchTimer(Entity):
         if hud.timer_text:
             hud.timer_text.text = f'{minutes:02d}:{seconds:02d}'
 
-        # 最后 30 秒闪烁
-        if self.remaining <= 30 and hud.timer_text:
+        # 最后 N 秒闪烁
+        if self.remaining <= Config.TIMER_WARNING_SECONDS and hud.timer_text:
             if int(self.remaining * 2) % 2 == 0:
                 hud.timer_text.color = color.red
             else:

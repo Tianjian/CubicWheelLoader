@@ -2,50 +2,7 @@
 import json
 import os
 import pytest
-from arena.map_loader import load_map, list_maps, _default_map
-
-
-class TestDefaultMap:
-    """内置默认地图数据测试"""
-
-    def test_default_map_structure(self):
-        data = _default_map()
-        assert "ground" in data
-        assert "red_base" in data
-        assert "blue_base" in data
-        assert "cover" in data
-        assert "boundary" in data
-
-    def test_default_map_name(self):
-        data = _default_map()
-        assert data["name"] == "Arena Classic"
-
-    def test_default_cover_count(self):
-        data = _default_map()
-        assert len(data["cover"]) == 12
-
-    def test_cover_has_position(self):
-        data = _default_map()
-        for item in data["cover"]:
-            assert "position" in item
-            assert len(item["position"]) == 3
-
-    def test_cover_has_scale(self):
-        data = _default_map()
-        for item in data["cover"]:
-            assert "scale" in item
-            assert len(item["scale"]) == 3
-
-    def test_base_has_position(self):
-        data = _default_map()
-        for key in ("red_base", "blue_base"):
-            assert "position" in data[key]
-            assert len(data[key]["position"]) == 3
-
-    def test_ground_has_size(self):
-        data = _default_map()
-        assert "size" in data["ground"]
-        assert data["ground"]["size"] == 64
+from arena.map_loader import load_map, list_maps, load_default_map
 
 
 class TestLoadMap:
@@ -82,6 +39,21 @@ class TestLoadMap:
         data = load_map("arena_classic")
         assert data["name"] == "Arena Classic"
         assert len(data["cover"]) == 12
+
+    def test_load_default_map(self):
+        """加载默认地图（arena_classic）"""
+        data = load_default_map()
+        assert "ground" in data
+        assert "red_base" in data
+        assert "blue_base" in data
+        assert "cover" in data
+        assert "boundary" in data
+
+    def test_missing_default_map_raises(self, tmp_path, monkeypatch):
+        """默认地图不存在时抛出 FileNotFoundError"""
+        monkeypatch.setattr("arena.map_loader._MAPS_DIR", str(tmp_path))
+        with pytest.raises(FileNotFoundError):
+            load_default_map()
 
 
 class TestListMaps:

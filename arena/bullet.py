@@ -1,5 +1,6 @@
 from ursina import *
 import random
+from arena.constants import Config
 
 # 全局子弹列表（用于比赛结束时批量清理）
 _all_bullets = []
@@ -11,7 +12,7 @@ class Bullet(Entity):
     def __init__(self, start_position, direction, owner, damage=10, speed=35, **kwargs):
         super().__init__(
             model='sphere',
-            scale=0.1,
+            scale=Config.BULLET_SCALE,
             color=color.yellow,
             position=start_position,
             collider='sphere',
@@ -21,7 +22,7 @@ class Bullet(Entity):
         self.direction = direction
         self.damage = damage
         self.speed = speed
-        self.max_distance = 100
+        self.max_distance = Config.BULLET_MAX_DISTANCE
         self.start_position = start_position
         _all_bullets.append(self)
 
@@ -35,7 +36,7 @@ class Bullet(Entity):
             destroy(self)
             return
 
-        move_distance = self.speed * time.dt * 1.5
+        move_distance = self.speed * time.dt * Config.BULLET_SPEED_MULTIPLIER
         hit_info = raycast(
             self.position,
             self.direction,

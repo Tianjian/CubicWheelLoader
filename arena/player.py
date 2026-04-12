@@ -134,6 +134,13 @@ class Player(Entity):
         self._blink_count = 0
         invoke(self._end_invincibility, delay=Config.INVINCIBLE_DURATION)
 
+        # 如果是人类玩家，恢复相机和准星（在 respawn 内部执行，避免竞态）
+        from arena.game_manager import game_manager
+        if self == game_manager.human_player and game_manager.camera_controller:
+            game_manager.camera_controller.set_third_person()
+            from arena.hud import hud
+            hud.ground_crosshair.enabled = True
+
     def _end_invincibility(self):
         """结束无敌状态"""
         if self.destroyed:

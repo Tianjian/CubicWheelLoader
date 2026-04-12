@@ -53,7 +53,7 @@ class AIController:
 
         # 射击节流
         self.last_shoot_time = 0
-        self.shoot_interval = 0.2
+        self.shoot_interval = Config.AI_SHOOT_INTERVAL
 
     def update(self):
         """纯计算，返回决策字典"""
@@ -145,7 +145,7 @@ class AIController:
 
         target = self.patrol_points[self.current_patrol_idx]
         my_pos = (self.player.x, self.player.y, self.player.z)
-        if dist_3d(my_pos, (target.x, target.y, target.z)) < 2:
+        if dist_3d(my_pos, (target.x, target.y, target.z)) < Config.AI_PATROL_ARRIVE_DISTANCE:
             self.current_patrol_idx = (self.current_patrol_idx + 1) % len(self.patrol_points)
 
         return {

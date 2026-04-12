@@ -1,5 +1,5 @@
 from ursina import *
-from arena.constants import Team, PlayerState, GameState, Config
+from arena.constants import Team, GameState, Config
 from arena.player import Player
 from arena.human_ctrl import HumanController
 from arena.ai_ctrl import AIController
@@ -35,21 +35,18 @@ class GameManager(Entity):
         self.input_manager = InputManager()
 
         # 加载地图数据
-        from arena.map_loader import load_map
-        map_name = map_name or Config.DEFAULT_MAP_NAME
-        try:
+        from arena.map_loader import load_map, load_default_map
+        if map_name:
             self.map_data = load_map(map_name)
-        except FileNotFoundError:
-            print(f'Warning: map "{map_name}" not found, using defaults')
-            from arena.map_loader import _default_map
-            self.map_data = _default_map()
+        else:
+            self.map_data = load_default_map()
 
         # 创建地图
         self.game_map = GameMap(self.map_data)
 
         # 创建 4 个玩家（出生点从地图数据读取）
-        red_pos = self.map_data.get('red_base', {}).get('position', Config.RED_BASE_POS)
-        blue_pos = self.map_data.get('blue_base', {}).get('position', Config.BLUE_BASE_POS)
+        red_pos = self.map_data['red_base']['position']
+        blue_pos = self.map_data['blue_base']['position']
         red_spawn = Vec3(*red_pos)
         blue_spawn = Vec3(*blue_pos)
 
@@ -145,13 +142,7 @@ class GameManager(Entity):
         """人类玩家死亡"""
         self.camera_controller.set_spectator()
         hud.ground_crosshair.enabled = False
-        # 3 秒后重生时恢复相机
-        invoke(self._on_human_respawn, delay=Config.RESPAWN_DELAY)
-
-    def _on_human_respawn(self):
-        """人类玩家重生"""
-        if self.human_player and self.human_player.state.value == 'respawning':
-            self.camera_controller.set_third_person()
+        # 相机恢复移入 Player.respawn()，避免 invoke 竞态
 
     def end_match(self):
         """比赛结束"""
@@ -331,7 +322,7 @@ class GameManager(Entity):
                     if hasattr(player.controller, 'avoiding'):
                         import random as _rand
                         player.controller.avoiding = True
-                        player.controller.avoid_end_time = time.time() + 1.0
+                        player.controller.avoid_end_time = time.time() + Config.AI_AVOID_DURATION
                         player.controller.avoid_direction = 1 if _rand.random() > 0.5 else -1
                     return  # 不移动
             player.position += player.forward * move_distance
