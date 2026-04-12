@@ -1,5 +1,4 @@
 from ursina import *
-import random
 from arena.constants import Config
 
 
@@ -47,7 +46,15 @@ class Weapon(Entity):
         invoke(self._hide_muzzle_flash, delay=Config.MUZZLE_FLASH_DURATION)
 
         # 播放射击音效
-        self.play_shoot_sound()
+        from arena.sound_manager import sound_manager
+        from arena.game_manager import game_manager
+        is_ai = (self.owner != game_manager.human_player)
+        sound_manager.play_shoot(
+            shooter_pos=self.owner.position,
+            listener_pos=game_manager.human_player.position if game_manager.human_player else None,
+            is_ai=is_ai,
+            player_id=self.owner.player_id,
+        )
 
         # 设置冷却
         self.on_cooldown = True
@@ -62,14 +69,3 @@ class Weapon(Entity):
         if self.destroyed:
             return
         self.on_cooldown = False
-
-    def play_shoot_sound(self):
-        """播放射击音效"""
-        from ursina.prefabs.ursfx import ursfx
-        ursfx(
-            [(0.0, 0.0), (0.05, 0.8), (0.1, 0.4), (0.15, 0.2), (0.2, 0.0)],
-            volume=0.5,
-            wave='noise',
-            pitch=random.uniform(-2, -1),
-            speed=1.5
-        )

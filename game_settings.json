@@ -52,5 +52,72 @@
     },
     "map": {
         "default_name": "arena_classic"
+    },
+    "sound": {
+        "master_volume": 0.8,
+        "max_concurrent": 6,
+        "ai_sound_throttle": 0.3,
+        "shoot_full_distance": 15,
+        "shoot_mute_distance": 40,
+        "shoot": {
+            "file": "shoot",
+            "volume": 0.35,
+            "pitch_range": [0.9, 1.1],
+            "duration": 0.3
+        },
+        "hit_player": {
+            "file": "hit_player",
+            "volume": 0.25,
+            "pitch_range": [1.0, 1.2],
+            "duration": 0.2
+        },
+        "hit_wall": {
+            "file": "hit_wall",
+            "volume": 0.15,
+            "pitch_range": [0.8, 1.0],
+            "duration": 0.15
+        },
+        "hit_goal": {
+            "file": "hit_goal",
+            "volume": 0.25,
+            "pitch_range": [1.0, 1.1],
+            "duration": 0.4
+        },
+        "damage": {
+            "file": "damage",
+            "volume": 0.3,
+            "pitch_range": [0.9, 1.0],
+            "duration": 0.4
+        },
+        "death": {
+            "file": "death",
+            "volume": 0.3,
+            "pitch_range": [0.8, 0.9],
+            "duration": 0.8
+        },
+        "kill": {
+            "file": "kill",
+            "volume": 0.2,
+            "pitch_range": [1.0, 1.0],
+            "duration": 0.4
+        },
+        "countdown": {
+            "file": "countdown",
+            "volume": 0.3,
+            "pitch_range": [1.0, 1.0],
+            "duration": 0.2
+        },
+        "match_start": {
+            "file": "match_start",
+            "volume": 0.35,
+            "pitch_range": [1.0, 1.0],
+            "duration": 0.6
+        },
+        "match_end": {
+            "file": "match_end",
+            "volume": 0.35,
+            "pitch_range": [1.0, 1.0],
+            "duration": 0.8
+        }
     }
 }

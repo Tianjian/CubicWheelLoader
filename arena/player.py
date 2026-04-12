@@ -89,6 +89,11 @@ class Player(Entity):
             return
 
         self.hp -= damage
+        # 受伤音效（仅人类玩家听到）
+        from arena.game_manager import game_manager
+        if self == game_manager.human_player:
+            from arena.sound_manager import sound_manager
+            sound_manager.play_damage()
         # 更新血条
         ratio = max(0, self.hp / self.max_hp)
         self.health_bar.world_scale_x = ratio * 1.5
@@ -111,6 +116,12 @@ class Player(Entity):
 
         # 通知 GameManager
         from arena.game_manager import game_manager
+
+        # 死亡音效（仅人类玩家听到自己的）
+        if self == game_manager.human_player:
+            from arena.sound_manager import sound_manager
+            sound_manager.play_death()
+
         game_manager.on_player_killed(killer, self)
 
         # 延迟重生

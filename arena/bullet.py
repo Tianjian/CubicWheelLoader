@@ -46,6 +46,7 @@ class Bullet(Entity):
 
         if hit_info.hit:
             target = hit_info.entity
+            hit_player = False
             # 友军伤害过滤
             if hasattr(target, 'team'):
                 if target == self.owner:
@@ -59,6 +60,7 @@ class Bullet(Entity):
                     original_color = target.color
                     target.color = color.white
                     target.animate_color(original_color, duration=0.1)
+                    hit_player = True
             elif hasattr(target, 'hp'):
                 # 兼容旧逻辑（非玩家实体）
                 target.hp -= self.damage
@@ -66,16 +68,20 @@ class Bullet(Entity):
                 target.color = color.red
                 target.animate_color(original_color, duration=0.1)
 
-            self.on_hit(hit_info)
+            self.on_hit(hit_info, hit_player=hit_player)
             self._remove_from_list()
             destroy(self)
             return
 
         self.position += self.direction * self.speed * time.dt
 
-    def on_hit(self, hit_info):
+    def on_hit(self, hit_info, hit_player=False):
         self.create_impact_effect(hit_info.world_point, hit_info.world_normal)
-        self.play_impact_sound()
+        from arena.sound_manager import sound_manager
+        if hit_player:
+            sound_manager.play_hit_player()
+        else:
+            sound_manager.play_hit_wall()
 
     def create_impact_effect(self, position, normal):
         for _ in range(5):
@@ -96,16 +102,6 @@ class Bullet(Entity):
             )
             particle.animate_scale(0, duration=0.3)
             destroy(particle, delay=0.3)
-
-    def play_impact_sound(self):
-        from ursina.prefabs.ursfx import ursfx
-        ursfx(
-            [(0.0, 0.0), (0.05, 0.5), (0.1, 0.2), (0.15, 0.1), (0.2, 0.0)],
-            volume=0.3,
-            wave='noise',
-            pitch=random.uniform(-8, -6),
-            speed=2.0
-        )
 
 
 def clear_all_bullets():

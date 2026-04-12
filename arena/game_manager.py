@@ -10,6 +10,7 @@ from arena.match_timer import MatchTimer
 from arena.kill_feed import kill_feed
 from arena.hud import hud
 from arena.input_manager import InputManager
+from arena.sound_manager import sound_manager
 
 
 class GameManager(Entity):
@@ -110,6 +111,7 @@ class GameManager(Entity):
                 scale=5,
                 color=color.yellow
             )
+            sound_manager.play_countdown()
             invoke(destroy, countdown_text, delay=0.9)
             invoke(self._countdown, seconds - 1, delay=1.0)
         else:
@@ -119,6 +121,7 @@ class GameManager(Entity):
                 scale=5,
                 color=color.green
             )
+            sound_manager.play_match_start()
             invoke(destroy, go_text, delay=0.5)
             self.state = GameState.PLAYING
             self.timer.start()
@@ -127,6 +130,11 @@ class GameManager(Entity):
         """击杀事件"""
         # 加分
         self.score_system.add_score(killer.team, Config.KILL_SCORE)
+
+        # 击杀音效（人类玩家击杀时播放）
+        if killer == self.human_player:
+            sound_manager.play_kill()
+            sound_manager.play_hit_goal()
 
         # 击杀播报
         kill_feed.add_kill(
@@ -148,6 +156,9 @@ class GameManager(Entity):
         """比赛结束"""
         self.state = GameState.MATCH_END
         self.timer.stop()
+
+        # 比赛结束音效
+        sound_manager.play_match_end()
 
         red_score = self.score_system.get_score(Team.RED)
         blue_score = self.score_system.get_score(Team.BLUE)

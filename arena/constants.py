@@ -38,11 +38,36 @@ _DEFAULTS = {
                'transition_speed': 10, 'fov_spectator': 45, 'follow_enable_delay': 0.3},
     'gamepad': {'shoot_threshold': 0.3},
     'map': {'default_name': 'arena_classic'},
+    'sound': {
+        'master_volume': 0.8, 'max_concurrent': 6, 'ai_sound_throttle': 0.3,
+        'shoot_full_distance': 15, 'shoot_mute_distance': 40,
+        'shoot': {'file': 'shoot', 'volume': 0.35, 'pitch_range': [0.9, 1.1], 'duration': 0.3},
+        'hit_player': {'file': 'hit_player', 'volume': 0.25, 'pitch_range': [1.0, 1.2], 'duration': 0.2},
+        'hit_wall': {'file': 'hit_wall', 'volume': 0.15, 'pitch_range': [0.8, 1.0], 'duration': 0.15},
+        'hit_goal': {'file': 'hit_goal', 'volume': 0.25, 'pitch_range': [1.0, 1.1], 'duration': 0.4},
+        'damage': {'file': 'damage', 'volume': 0.3, 'pitch_range': [0.9, 1.0], 'duration': 0.4},
+        'death': {'file': 'death', 'volume': 0.3, 'pitch_range': [0.8, 0.9], 'duration': 0.8},
+        'kill': {'file': 'kill', 'volume': 0.2, 'pitch_range': [1.0, 1.0], 'duration': 0.4},
+        'countdown': {'file': 'countdown', 'volume': 0.3, 'pitch_range': [1.0, 1.0], 'duration': 0.2},
+        'match_start': {'file': 'match_start', 'volume': 0.35, 'pitch_range': [1.0, 1.0], 'duration': 0.6},
+        'match_end': {'file': 'match_end', 'volume': 0.35, 'pitch_range': [1.0, 1.0], 'duration': 0.8},
+    },
 }
 
 
+def _deep_merge(base, override):
+    """深层合并字典：override 中的值覆盖 base，dict 类型递归合并"""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 def _load_settings():
-    """从 game_settings.json 加载配置，缺失字段用默认值"""
+    """从 game_settings.json 加载配置，缺失字段用默认值（支持嵌套 dict 深层合并）"""
     settings = {}
     for section, defaults in _DEFAULTS.items():
         settings[section] = dict(defaults)
@@ -54,7 +79,9 @@ def _load_settings():
                 user_settings = json.load(f)
             for section, values in user_settings.items():
                 if section in settings and isinstance(values, dict):
-                    settings[section].update(values)
+                    settings[section] = _deep_merge(settings[section], values)
+                else:
+                    settings[section] = values
         except (json.JSONDecodeError, IOError) as e:
             print(f'[Config] Warning: Failed to load game_settings.json: {e}, using defaults')
 
@@ -122,5 +149,22 @@ class Config:
 
     # 地图
     DEFAULT_MAP_NAME = _settings['map']['default_name']
+
+    # 音效
+    SOUND_MASTER_VOLUME = _settings['sound']['master_volume']
+    SOUND_MAX_CONCURRENT = _settings['sound']['max_concurrent']
+    SOUND_AI_THROTTLE = _settings['sound']['ai_sound_throttle']
+    SOUND_SHOOT_FULL_DIST = _settings['sound']['shoot_full_distance']
+    SOUND_SHOOT_MUTE_DIST = _settings['sound']['shoot_mute_distance']
+    SOUND_SHOOT = _settings['sound']['shoot']
+    SOUND_HIT_PLAYER = _settings['sound']['hit_player']
+    SOUND_HIT_WALL = _settings['sound']['hit_wall']
+    SOUND_HIT_GOAL = _settings['sound']['hit_goal']
+    SOUND_DAMAGE = _settings['sound']['damage']
+    SOUND_DEATH = _settings['sound']['death']
+    SOUND_KILL = _settings['sound']['kill']
+    SOUND_COUNTDOWN = _settings['sound']['countdown']
+    SOUND_MATCH_START = _settings['sound']['match_start']
+    SOUND_MATCH_END = _settings['sound']['match_end']
 
     TEAM_COLORS = None  # 延迟初始化（需要 ursina.color）
