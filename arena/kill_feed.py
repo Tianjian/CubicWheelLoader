@@ -26,7 +26,10 @@ class KillFeed:
     def _remove_message(self, msg):
         if msg in self.messages:
             self.messages.remove(msg)
-            destroy(msg)
+            try:
+                destroy(msg)
+            except Exception:
+                pass  # 实体可能已被 clear() 销毁
             self._rearrange()
 
     def _rearrange(self):

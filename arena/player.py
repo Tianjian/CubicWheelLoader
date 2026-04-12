@@ -40,6 +40,8 @@ class Player(Entity):
 
         # 控制器（由 GameManager 赋值）
         self.controller = None
+        self.destroyed = False
+        self._pending_ai_cmd = None
 
         # 武器
         from arena.weapon import Weapon
@@ -116,8 +118,7 @@ class Player(Entity):
 
     def respawn(self):
         """在基地重生"""
-        # 防止实体已被销毁后仍触发重生
-        if not hasattr(self, 'enabled') or not self.enabled:
+        if self.destroyed:
             return
         self.hp = self.max_hp
         self.health_bar.world_scale_x = 1.5
@@ -135,7 +136,7 @@ class Player(Entity):
 
     def _end_invincibility(self):
         """结束无敌状态"""
-        if not hasattr(self, 'enabled') or not self.enabled:
+        if self.destroyed:
             return
         self.invincible = False
         self.state = PlayerState.ALIVE
@@ -157,4 +158,10 @@ class Player(Entity):
             return
 
         if self.state == PlayerState.ALIVE and self.controller:
-            self.controller.update()
+            # AI 控制器返回决策字典（由 GameManager 统一应用）
+            # 人类控制器直接操作玩家
+            result = self.controller.update()
+            if isinstance(result, dict) and result:
+                self._pending_ai_cmd = result
+            else:
+                self._pending_ai_cmd = None

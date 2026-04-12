@@ -1,6 +1,9 @@
 from ursina import *
 import random
 
+# 全局子弹列表（用于比赛结束时批量清理）
+_all_bullets = []
+
 
 class Bullet(Entity):
     """实体子弹类（复用自 fps_demo_v4，新增 owner 属性用于友军判定）"""
@@ -20,9 +23,15 @@ class Bullet(Entity):
         self.speed = speed
         self.max_distance = 100
         self.start_position = start_position
+        _all_bullets.append(self)
+
+    def _remove_from_list(self):
+        if self in _all_bullets:
+            _all_bullets.remove(self)
 
     def update(self):
         if distance(self.position, self.start_position) > self.max_distance:
+            self._remove_from_list()
             destroy(self)
             return
 
@@ -57,6 +66,7 @@ class Bullet(Entity):
                 target.animate_color(original_color, duration=0.1)
 
             self.on_hit(hit_info)
+            self._remove_from_list()
             destroy(self)
             return
 
@@ -95,3 +105,10 @@ class Bullet(Entity):
             pitch=random.uniform(-8, -6),
             speed=2.0
         )
+
+
+def clear_all_bullets():
+    """清理所有飞行中的子弹（比赛结束时调用）"""
+    for b in _all_bullets[:]:
+        destroy(b)
+    _all_bullets.clear()

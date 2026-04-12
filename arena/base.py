@@ -9,29 +9,31 @@ def get_team_color(team):
 class Base(Entity):
     """队伍基地（重生区域）"""
 
-    def __init__(self, team, position):
+    def __init__(self, team, position, radius=6,
+                 pillars=None, pillar_height=5):
         base_color = get_team_color(team)
-        pos = Vec3(position)
 
-        super().__init__(position=pos)
+        super().__init__(position=Vec3(*position))
         self.team = team
 
-        # 地面标记
+        # 地面标记（parent=self，局部坐标）
         Entity(
-            model='circle', scale=6, y=0.05,
+            parent=self, model='circle', scale=radius, y=0.05,
             color=base_color, alpha=0.3
         )
-        # 基地柱子（纯装饰，无碰撞体）
-        for dx, dz in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
+        # 基地柱子（parent=self，局部坐标）
+        for dx, dz in (pillars or [(-2, -2), (2, -2), (-2, 2), (2, 2)]):
             Entity(
-                model='cube', scale=(0.5, 5, 0.5),
-                position=pos + Vec3(dx, 0, dz),
+                parent=self, model='cube',
+                scale=(0.5, pillar_height, 0.5),
+                position=Vec3(dx, 0, dz),
                 color=base_color
             )
-        # 队伍名标签
+        # 队伍名标签（parent=self，局部坐标）
         Text(
             text=f'{team.value.upper()} BASE',
-            position=pos + Vec3(0, 6, 0),
+            parent=self,
+            position=Vec3(0, 6, 0),
             origin=(0, 0),
             scale=30,
             color=base_color,

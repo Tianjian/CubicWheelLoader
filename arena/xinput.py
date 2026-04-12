@@ -69,6 +69,29 @@ def is_available():
     return _dll is not None
 
 
+def _parse_state(state):
+    """从 XINPUT_STATE 解析游戏状态（纯函数，可测试）"""
+    g = state.Gamepad
+
+    # 归一化摇杆，应用死区
+    lx = g.thumbLX / MAX_AXIS if abs(g.thumbLX) > STICK_DEADZONE else 0.0
+    ly = g.thumbLY / MAX_AXIS if abs(g.thumbLY) > STICK_DEADZONE else 0.0
+    rx = g.thumbRX / MAX_AXIS if abs(g.thumbRX) > STICK_DEADZONE else 0.0
+    ry = -g.thumbRY / MAX_AXIS if abs(g.thumbRY) > STICK_DEADZONE else 0.0
+
+    # 扳机 (0..255 -> 0..1)
+    lt = g.bLeftTrigger / 255.0 if g.bLeftTrigger > TRIGGER_THRESHOLD else 0.0
+    rt = g.bRightTrigger / 255.0 if g.bRightTrigger > TRIGGER_THRESHOLD else 0.0
+
+    # 按键
+    buttons = {name for name, mask in BUTTONS.items() if g.wButtons & mask}
+
+    return {
+        'lx': lx, 'ly': ly, 'rx': rx, 'ry': ry,
+        'lt': lt, 'rt': rt, 'buttons': buttons,
+    }
+
+
 def get_state(controller=0):
     """
     读取手柄状态。返回 None 表示未连接或平台不支持。
@@ -90,25 +113,7 @@ def get_state(controller=0):
     if result != 0:
         return None
 
-    g = state.Gamepad
-
-    # 归一化摇杆，应用死区
-    lx = g.thumbLX / MAX_AXIS if abs(g.thumbLX) > STICK_DEADZONE else 0.0
-    ly = g.thumbLY / MAX_AXIS if abs(g.thumbLY) > STICK_DEADZONE else 0.0
-    rx = g.thumbRX / MAX_AXIS if abs(g.thumbRX) > STICK_DEADZONE else 0.0
-    ry = -g.thumbRY / MAX_AXIS if abs(g.thumbRY) > STICK_DEADZONE else 0.0
-
-    # 扳机 (0..255 -> 0..1)
-    lt = g.bLeftTrigger / 255.0 if g.bLeftTrigger > TRIGGER_THRESHOLD else 0.0
-    rt = g.bRightTrigger / 255.0 if g.bRightTrigger > TRIGGER_THRESHOLD else 0.0
-
-    # 按键
-    buttons = {name for name, mask in BUTTONS.items() if g.wButtons & mask}
-
-    return {
-        'lx': lx, 'ly': ly, 'rx': rx, 'ry': ry,
-        'lt': lt, 'rt': rt, 'buttons': buttons,
-    }
+    return _parse_state(state)
 
 
 def vibrate(controller=0, left=0.0, right=0.0):

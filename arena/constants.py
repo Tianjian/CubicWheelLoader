@@ -43,6 +43,7 @@ class Config:
     MAP_SIZE = 64
     RED_BASE_POS = (0, 0, -24)
     BLUE_BASE_POS = (0, 0, 24)
+    DEFAULT_MAP_NAME = 'arena_classic'
 
     # 人类玩家
     HUMAN_MOVE_SPEED = 8
@@ -54,6 +55,10 @@ class Config:
     AI_DETECTION_RANGE = 40
     AI_ATTACK_RANGE = 25
     AI_SHOOT_SPREAD = 0.05
+
+    # AI 子进程
+    AI_USE_SUBPROCESS = False  # True=独立进程运行AI, False=主线程运行
+    AI_SUBPROCESS_TIMEOUT = 0.005  # 等待AI决策的最大时间（秒）
 
     # 相机（TPS，与 fps_demo_v4 一致）
     CAMERA_DISTANCE = 40

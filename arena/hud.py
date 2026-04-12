@@ -126,6 +126,16 @@ class HUD:
         self.timer_text.text = 'MATCH OVER'
         self.timer_text.color = winner_color
 
+    def destroy(self):
+        """销毁所有 HUD 元素"""
+        for attr in ('score_text', 'timer_text', 'hp_bg', 'hp_bar',
+                     'stats_text', 'identity_text', 'controls_text',
+                     'ground_crosshair'):
+            obj = getattr(self, attr, None)
+            if obj:
+                destroy(obj)
+                setattr(self, attr, None)
+
 
 # 全局 HUD 实例
 hud = HUD()

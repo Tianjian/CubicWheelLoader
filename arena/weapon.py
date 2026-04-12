@@ -14,6 +14,7 @@ class Weapon(Entity):
         self.fire_rate = fire_rate
         self.on_cooldown = False
         self.last_fire_time = 0
+        self.destroyed = False
 
         # 枪口闪光
         self.muzzle_flash = Entity(
@@ -42,14 +43,24 @@ class Weapon(Entity):
 
         # 枪口闪光
         self.muzzle_flash.enabled = True
-        invoke(self.muzzle_flash.disable, delay=0.05)
+        invoke(self._hide_muzzle_flash, delay=0.05)
 
         # 播放射击音效
         self.play_shoot_sound()
 
         # 设置冷却
         self.on_cooldown = True
-        invoke(setattr, self, 'on_cooldown', False, delay=self.fire_rate)
+        invoke(self._end_cooldown, delay=self.fire_rate)
+
+    def _hide_muzzle_flash(self):
+        if self.destroyed:
+            return
+        self.muzzle_flash.enabled = False
+
+    def _end_cooldown(self):
+        if self.destroyed:
+            return
+        self.on_cooldown = False
 
     def play_shoot_sound(self):
         """播放射击音效"""

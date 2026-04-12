@@ -16,6 +16,32 @@ from arena.xinput import get_state, is_available, vibrate
 from arena.constants import Config
 
 
+def merge_inputs(kb_val, gp_val):
+    """合并键盘和手柄输入：取绝对值较大的值（保留符号）"""
+    return kb_val if abs(kb_val) > abs(gp_val) else gp_val
+
+
+def parse_gamepad_state(state):
+    """从手柄状态解析归一化输入（纯函数，可测试）
+
+    Returns:
+        tuple: (forward, sideways, shoot, action)
+    """
+    if state is None:
+        return 0.0, 0.0, 0.0, False
+
+    # 左摇杆 Y → 前后移动
+    fwd = state['ly']
+    # 右摇杆 X → 左右旋转
+    side = state['rx']
+    # 左扳机 → 射击
+    shoot = state['lt']
+    # 瞬时按键
+    action = 'X' in state.get('buttons', set())
+
+    return fwd, side, shoot, action
+
+
 class InputManager(Entity):
     """输入管理器 — 统一键盘/鼠标/手柄输入"""
 
@@ -39,16 +65,18 @@ class InputManager(Entity):
         self.action = False
 
         kb = self._read_keyboard()
-        gp = self._read_gamepad()
+        gp_state = get_state(0)
+        gp_fwd, gp_side, gp_shoot, gp_action = parse_gamepad_state(gp_state)
 
-        # 合并：取绝对值较大的输入（保留符号）
-        # 键盘 0/1 覆盖手柄小量，手柄负值不会被键盘的 0.0 吞掉
-        def _merge(kb_val, gp_val):
-            return kb_val if abs(kb_val) > abs(gp_val) else gp_val
+        if gp_action:
+            self.action = True
 
-        self.move_forward = _merge(kb[0], gp[0])
-        self.move_sideways = _merge(kb[1], gp[1])
-        self.shoot = _merge(kb[2], gp[2])
+        if gp_state is None:
+            self.gamepad_connected = False
+
+        self.move_forward = merge_inputs(kb[0], gp_fwd)
+        self.move_sideways = merge_inputs(kb[1], gp_side)
+        self.shoot = merge_inputs(kb[2], gp_shoot)
 
     def _read_keyboard(self):
         """读取键盘/鼠标输入"""
@@ -68,28 +96,6 @@ class InputManager(Entity):
 
         if held_keys['left mouse']:
             shoot = 1.0
-
-        return fwd, side, shoot
-
-    def _read_gamepad(self):
-        """读取手柄输入"""
-        state = get_state(0)
-        if state is None:
-            self.gamepad_connected = False
-            self.input_source = 'keyboard'
-            return 0.0, 0.0, 0.0
-
-        # 左摇杆 Y → 前后移动
-        fwd = state['ly']
-        # 右摇杆 X → 左右旋转
-        side = state['rx']
-        # 左扳机 → 射击
-        shoot = state['lt']
-
-        # 瞬时按键
-        buttons = state['buttons']
-        if 'X' in buttons:
-            self.action = True
 
         return fwd, side, shoot
 
