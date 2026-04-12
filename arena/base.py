@@ -10,11 +10,13 @@ class Base(Entity):
     """队伍基地（重生区域）"""
 
     def __init__(self, team, position, radius=6,
-                 pillars=None, pillar_height=5):
+                 pillars=None, pillar_height=5,
+                 reload_radius=None):
         base_color = get_team_color(team)
 
         super().__init__(position=Vec3(*position))
         self.team = team
+        self.reload_radius = reload_radius or radius
 
         # 地面标记（parent=self，局部坐标）
         Entity(

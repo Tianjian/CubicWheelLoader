@@ -14,6 +14,8 @@ class HUD:
         self.identity_text = None
         self.controls_text = None
         self.ground_crosshair = None
+        self.ammo_text = None
+        self.goal_status_text = None
 
     def create(self):
         """创建所有 HUD 元素"""
@@ -53,6 +55,25 @@ class HUD:
         self.stats_text = Text(
             text='K: 0  D: 0',
             position=(0, -0.42),
+            origin=(0, 0),
+            scale=1,
+            parent=camera.ui
+        )
+
+        # 弹药显示
+        self.ammo_text = Text(
+            text='AMMO: 10/10',
+            position=(0, -0.46),
+            origin=(0, 0),
+            scale=1,
+            color=color.yellow,
+            parent=camera.ui
+        )
+
+        # Goal 占领状态
+        self.goal_status_text = Text(
+            text='● ○ ● ○',
+            position=(0, 0.39),
             origin=(0, 0),
             scale=1,
             parent=camera.ui
@@ -107,6 +128,13 @@ class HUD:
         # 战绩
         self.stats_text.text = f'K: {player.kills}  D: {player.deaths}'
 
+        # 弹药
+        if hasattr(player, 'weapon') and hasattr(player.weapon, 'current_ammo'):
+            ammo = player.weapon.current_ammo
+            max_ammo = player.weapon.max_ammo
+            self.ammo_text.text = f'AMMO: {ammo}/{max_ammo}'
+            self.ammo_text.color = color.yellow if ammo > 3 else color.red
+
         # 地面准星
         if player.state.value == 'alive':
             self.ground_crosshair.position = player.position + player.forward * 10
@@ -130,7 +158,7 @@ class HUD:
         """销毁所有 HUD 元素"""
         for attr in ('score_text', 'timer_text', 'hp_bg', 'hp_bar',
                      'stats_text', 'identity_text', 'controls_text',
-                     'ground_crosshair'):
+                     'ground_crosshair', 'ammo_text', 'goal_status_text'):
             obj = getattr(self, attr, None)
             if obj:
                 destroy(obj)

@@ -16,6 +16,10 @@ class Weapon(Entity):
         self.last_fire_time = 0
         self.destroyed = False
 
+        # 弹药系统
+        self.max_ammo = Config.WEAPON_MAX_AMMO
+        self.current_ammo = self.max_ammo
+
         # 枪口闪光
         self.muzzle_flash = Entity(
             parent=self,
@@ -30,6 +34,10 @@ class Weapon(Entity):
         """开火"""
         if self.on_cooldown:
             return
+        if self.current_ammo <= 0:
+            return
+
+        self.current_ammo -= 1
 
         # 创建子弹
         from arena.bullet import Bullet
@@ -69,3 +77,7 @@ class Weapon(Entity):
         if self.destroyed:
             return
         self.on_cooldown = False
+
+    def reload(self):
+        """装填弹药"""
+        self.current_ammo = self.max_ammo

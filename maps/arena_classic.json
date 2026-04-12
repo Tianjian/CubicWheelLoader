@@ -1,6 +1,6 @@
 {
     "name": "Arena Classic",
-    "version": 1,
+    "version": 2,
     "ground": {
         "size": 64,
         "texture": "grass",
@@ -9,28 +9,28 @@
     "red_base": {
         "position": [0, 0, -24],
         "radius": 6,
+        "reload_radius": 6,
         "pillars": [[-2, -2], [2, -2], [-2, 2], [2, 2]],
         "pillar_height": 5
     },
     "blue_base": {
         "position": [0, 0, 24],
         "radius": 6,
+        "reload_radius": 6,
         "pillars": [[-2, -2], [2, -2], [-2, 2], [2, 2]],
         "pillar_height": 5
     },
+    "goals": [
+        {"id": 1, "position": [-8, 0, -8]},
+        {"id": 2, "position": [8, 0, -8]},
+        {"id": 3, "position": [-8, 0, 8]},
+        {"id": 4, "position": [8, 0, 8]}
+    ],
     "cover": [
-        {"position": [-12, 0, -10], "scale": [2, 2.5, 1]},
-        {"position": [-12, 0, 10], "scale": [2, 2.5, 1]},
-        {"position": [12, 0, -10], "scale": [2, 2.5, 1]},
-        {"position": [12, 0, 10], "scale": [2, 2.5, 1]},
-        {"position": [-5, 0, 0], "scale": [2, 2.5, 1]},
-        {"position": [5, 0, 0], "scale": [2, 2.5, 1]},
-        {"position": [-8, 0, -5], "scale": [2, 2.5, 1]},
-        {"position": [8, 0, 5], "scale": [2, 2.5, 1]},
-        {"position": [-6, 0, -14], "scale": [2, 2.5, 1]},
-        {"position": [6, 0, -14], "scale": [2, 2.5, 1]},
-        {"position": [-6, 0, 14], "scale": [2, 2.5, 1]},
-        {"position": [6, 0, 14], "scale": [2, 2.5, 1]}
+        {"position": [-8, 0, 0], "scale": [2, 2.5, 1]},
+        {"position": [8, 0, 0], "scale": [2, 2.5, 1]},
+        {"position": [0, 0, -8], "scale": [2, 2.5, 1]},
+        {"position": [0, 0, 8], "scale": [2, 2.5, 1]}
     ],
     "boundary": {
         "thickness": 1,

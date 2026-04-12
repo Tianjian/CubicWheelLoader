@@ -81,6 +81,17 @@ class Player(Entity):
             color=team_color
         )
 
+        # 弹药显示（血条下方，数字形式）
+        self.ammo_text = Text(
+            text=f'{self.weapon.max_ammo}/{self.weapon.max_ammo}',
+            parent=self,
+            y=1.7,
+            scale=10,
+            origin=(0, 0),
+            billboard=True,
+            color=color.yellow
+        )
+
     def take_damage(self, damage, attacker):
         """受到伤害"""
         if self.state != PlayerState.ALIVE:
@@ -134,6 +145,8 @@ class Player(Entity):
         self.hp = self.max_hp
         self.health_bar.world_scale_x = 1.5
         self.health_bar.color = color.green
+        self.weapon.reload()
+        self._update_ammo_display()
         self.position = Vec3(self.spawn_position)
         self.rotation = Vec3(0, 0, 0)
         self.visible = True
@@ -176,6 +189,10 @@ class Player(Entity):
             return
 
         if self.state == PlayerState.ALIVE and self.controller:
+            # 基地装填检测
+            self._check_base_reload()
+            # 更新弹药显示
+            self._update_ammo_display()
             # AI 控制器返回决策字典（由 GameManager 统一应用）
             # 人类控制器直接操作玩家
             result = self.controller.update()
@@ -183,3 +200,28 @@ class Player(Entity):
                 self._pending_ai_cmd = result
             else:
                 self._pending_ai_cmd = None
+
+    def _check_base_reload(self):
+        """在本方基地内自动装填弹药"""
+        if self.weapon.current_ammo >= self.weapon.max_ammo:
+            return
+        from arena.game_manager import game_manager
+        base_cfg = game_manager.map_data.get('red_base', {}) \
+            if self.team == Team.RED \
+            else game_manager.map_data.get('blue_base', {})
+        base_pos = Vec3(*base_cfg.get('position', [0, 0, 0]))
+        reload_radius = base_cfg.get('reload_radius', base_cfg.get('radius', 6))
+        if distance(self.position, base_pos) < reload_radius:
+            self.weapon.reload()
+            self._update_ammo_display()
+            from arena.sound_manager import sound_manager
+            sound_manager.play_reload()
+
+    def _update_ammo_display(self):
+        """更新弹药显示（仅在实际变化时更新）"""
+        ammo = self.weapon.current_ammo
+        max_ammo = self.weapon.max_ammo
+        new_text = f'{ammo}/{max_ammo}'
+        if self.ammo_text.text != new_text:
+            self.ammo_text.text = new_text
+            self.ammo_text.color = color.yellow if ammo > 3 else color.red

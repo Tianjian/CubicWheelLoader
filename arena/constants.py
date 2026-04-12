@@ -27,13 +27,15 @@ class CameraMode(Enum):
 # ==================== 默认配置（JSON 文件不存在时使用） ====================
 _DEFAULTS = {
     'player': {'max_hp': 100, 'scale': 1, 'respawn_delay': 3.0, 'invincible_duration': 2.0},
-    'weapon': {'bullet_damage': 10, 'bullet_speed': 35, 'fire_rate': 0.15, 'muzzle_flash_duration': 0.05},
-    'bullet': {'max_distance': 100, 'scale': 0.1, 'speed_multiplier': 1.5},
+    'weapon': {'bullet_damage': 30, 'bullet_speed': 35, 'fire_rate': 0.15, 'muzzle_flash_duration': 0.05, 'max_ammo': 10},
+    'bullet': {'max_distance': 5, 'scale': 0.3, 'speed_multiplier': 1.5},
     'human': {'move_speed': 8, 'rotation_speed': 120, 'input_deadzone': 0.05},
     'ai': {'move_speed': 6, 'rotation_speed': 90, 'detection_range': 40, 'attack_range': 25,
-           'shoot_spread': 0.05, 'shoot_interval': 0.2, 'patrol_arrive_distance': 2,
-           'avoid_duration': 1.0, 'use_subprocess': False, 'subprocess_timeout': 0.005},
-    'match': {'duration': 300, 'kill_score': 3, 'timer_warning_seconds': 30},
+           'shoot_spread': 0.05, 'shoot_interval': 0.4, 'patrol_arrive_distance': 2,
+           'avoid_duration': 1.0, 'use_subprocess': False, 'subprocess_timeout': 0.005,
+           'low_ammo_threshold': 3, 'strafe_enabled': True, 'los_check_enabled': True,
+           'goal_shoot_spread_multiplier': 0.5},
+    'match': {'duration': 300, 'kill_score': 0, 'goal_score': 10, 'goal_hit_window': 7, 'timer_warning_seconds': 30},
     'camera': {'distance': 40, 'height': 15, 'fov_tps': 60, 'fov_far': 45,
                'transition_speed': 10, 'fov_spectator': 45, 'follow_enable_delay': 0.3},
     'gamepad': {'shoot_threshold': 0.3},
@@ -105,6 +107,7 @@ class Config:
     BULLET_SPEED = _settings['weapon']['bullet_speed']
     FIRE_RATE = _settings['weapon']['fire_rate']
     MUZZLE_FLASH_DURATION = _settings['weapon']['muzzle_flash_duration']
+    WEAPON_MAX_AMMO = _settings['weapon'].get('max_ammo', 10)
 
     # 子弹
     BULLET_MAX_DISTANCE = _settings['bullet']['max_distance']
@@ -125,6 +128,10 @@ class Config:
     AI_SHOOT_INTERVAL = _settings['ai']['shoot_interval']
     AI_PATROL_ARRIVE_DISTANCE = _settings['ai']['patrol_arrive_distance']
     AI_AVOID_DURATION = _settings['ai']['avoid_duration']
+    AI_LOW_AMMO_THRESHOLD = _settings['ai'].get('low_ammo_threshold', 3)
+    AI_STRAFE_ENABLED = _settings['ai'].get('strafe_enabled', True)
+    AI_LOS_CHECK_ENABLED = _settings['ai'].get('los_check_enabled', True)
+    AI_GOAL_SHOOT_SPREAD_MULT = _settings['ai'].get('goal_shoot_spread_multiplier', 0.5)
 
     # AI 子进程
     AI_USE_SUBPROCESS = _settings['ai']['use_subprocess']
@@ -133,6 +140,8 @@ class Config:
     # 比赛规则
     MATCH_DURATION = _settings['match']['duration']
     KILL_SCORE = _settings['match']['kill_score']
+    GOAL_SCORE = _settings['match'].get('goal_score', 10)
+    GOAL_HIT_WINDOW = _settings['match'].get('goal_hit_window', 7)
     TIMER_WARNING_SECONDS = _settings['match']['timer_warning_seconds']
 
     # 相机

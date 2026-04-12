@@ -23,6 +23,20 @@ class KillFeed:
         self.messages.append(msg)
         invoke(self._remove_message, msg, delay=5.0)
 
+    def add_goal_capture(self, team_name, goal_id):
+        """Goal 占领变化播报"""
+        team_color = color.red if team_name == 'RED' else color.azure
+
+        msg = Text(
+            text=f'{team_name} captured Goal {goal_id}!',
+            position=(0.25, self.base_y - len(self.messages) * self.line_offset),
+            scale=0.8,
+            color=team_color,
+            background=True
+        )
+        self.messages.append(msg)
+        invoke(self._remove_message, msg, delay=5.0)
+
     def _remove_message(self, msg):
         if msg in self.messages:
             self.messages.remove(msg)

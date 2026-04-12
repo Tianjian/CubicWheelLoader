@@ -24,3 +24,15 @@ class TeamScoreSystem(Entity):
     def reset(self):
         self.scores = {Team.RED: 0, Team.BLUE: 0}
         self.update_ui()
+
+    def update_from_goals(self, goals):
+        """从 Goal 占领状态更新实时分数"""
+        from arena.constants import Config
+        self.scores[Team.RED] = 0
+        self.scores[Team.BLUE] = 0
+        for goal in goals:
+            if goal.owner == Team.RED:
+                self.scores[Team.RED] += Config.GOAL_SCORE
+            elif goal.owner == Team.BLUE:
+                self.scores[Team.BLUE] += Config.GOAL_SCORE
+        self.update_ui()

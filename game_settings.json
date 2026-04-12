@@ -6,14 +6,15 @@
         "invincible_duration": 2.0
     },
     "weapon": {
-        "bullet_damage": 10,
+        "bullet_damage": 30,
         "bullet_speed": 35,
         "fire_rate": 0.15,
-        "muzzle_flash_duration": 0.05
+        "muzzle_flash_duration": 0.05,
+        "max_ammo": 10
     },
     "bullet": {
-        "max_distance": 100,
-        "scale": 0.1,
+        "max_distance": 5,
+        "scale": 0.3,
         "speed_multiplier": 1.5
     },
     "human": {
@@ -27,15 +28,21 @@
         "detection_range": 40,
         "attack_range": 25,
         "shoot_spread": 0.05,
-        "shoot_interval": 0.2,
+        "shoot_interval": 0.4,
         "patrol_arrive_distance": 2,
         "avoid_duration": 1.0,
         "use_subprocess": false,
-        "subprocess_timeout": 0.005
+        "subprocess_timeout": 0.005,
+        "low_ammo_threshold": 3,
+        "strafe_enabled": true,
+        "los_check_enabled": true,
+        "goal_shoot_spread_multiplier": 0.5
     },
     "match": {
         "duration": 300,
-        "kill_score": 3,
+        "kill_score": 0,
+        "goal_score": 10,
+        "goal_hit_window": 7,
         "timer_warning_seconds": 30
     },
     "camera": {

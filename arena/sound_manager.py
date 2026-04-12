@@ -88,6 +88,11 @@ class SoundManager:
         cfg = Config.SOUND_MATCH_END
         self._play(cfg, 1.0, cfg['pitch_range'][0])
 
+    def play_reload(self):
+        """播放装填音效（复用 match_start）"""
+        cfg = Config.SOUND_MATCH_START
+        self._play(cfg, 1.0, cfg['pitch_range'][0])
+
     def _play(self, cfg, volume_scale=1.0, pitch=1.0):
         """底层播放：并发限制 + 主音量缩放"""
         if self.active_sounds >= self.max_concurrent:

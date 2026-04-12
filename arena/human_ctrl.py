@@ -26,8 +26,9 @@ class HumanController:
         if abs(im.move_forward) > Config.INPUT_DEADZONE:
             move_amount = im.move_forward * self.move_speed * time.dt
             direction = self.player.forward if move_amount > 0 else -self.player.forward
+            ignore_list = self._get_move_ignore_list()
             ray = raycast(self.player.position, direction,
-                          distance=abs(move_amount), ignore=(self.player,))
+                          distance=abs(move_amount), ignore=ignore_list)
             if not ray.hit:
                 self.player.position += direction * abs(move_amount)
 
@@ -35,3 +36,11 @@ class HumanController:
         if im.shoot > Config.GAMEPAD_SHOOT_THRESHOLD:
             shoot_dir = self.player.forward.normalized()
             self.player.weapon.shoot(shoot_dir)
+
+    def _get_move_ignore_list(self):
+        """获取移动 raycast 应忽略的实体列表（自己 + Goal）"""
+        from arena.game_manager import game_manager
+        ignore = [self.player]
+        if game_manager.game_map:
+            ignore.extend(game_manager.game_map.goals)
+        return ignore

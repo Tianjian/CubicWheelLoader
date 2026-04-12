@@ -47,14 +47,20 @@ class Bullet(Entity):
         if hit_info.hit:
             target = hit_info.entity
             hit_player = False
-            # 友军伤害过滤
-            if hasattr(target, 'team'):
+            hit_goal = False
+
+            # 优先检测 Goal（hasattr 避免循环导入）
+            if hasattr(target, 'on_bullet_hit'):
+                target.on_bullet_hit(self.owner.team)
+                hit_goal = True
+            # 友军/自己/无敌：子弹穿过，不销毁
+            elif hasattr(target, 'team'):
                 if target == self.owner:
-                    pass  # 不伤害自己
+                    return  # 穿过自己
                 elif target.team == self.owner.team:
-                    pass  # 不伤害队友
+                    return  # 穿过队友
                 elif hasattr(target, 'invincible') and target.invincible:
-                    pass  # 无敌状态不受伤
+                    return  # 穿过无敌目标
                 else:
                     target.take_damage(self.damage, self.owner)
                     original_color = target.color
@@ -68,17 +74,19 @@ class Bullet(Entity):
                 target.color = color.red
                 target.animate_color(original_color, duration=0.1)
 
-            self.on_hit(hit_info, hit_player=hit_player)
+            self.on_hit(hit_info, hit_player=hit_player, hit_goal=hit_goal)
             self._remove_from_list()
             destroy(self)
             return
 
         self.position += self.direction * self.speed * time.dt
 
-    def on_hit(self, hit_info, hit_player=False):
+    def on_hit(self, hit_info, hit_player=False, hit_goal=False):
         self.create_impact_effect(hit_info.world_point, hit_info.world_normal)
         from arena.sound_manager import sound_manager
-        if hit_player:
+        if hit_goal:
+            sound_manager.play_hit_goal()
+        elif hit_player:
             sound_manager.play_hit_player()
         else:
             sound_manager.play_hit_wall()

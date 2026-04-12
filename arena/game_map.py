@@ -29,6 +29,7 @@ class GameMap:
             radius=red_cfg.get('radius', 6),
             pillars=red_cfg.get('pillars'),
             pillar_height=red_cfg.get('pillar_height', 5),
+            reload_radius=red_cfg.get('reload_radius'),
         )
         self.blue_base = Base(
             team=Team.BLUE,
@@ -36,6 +37,7 @@ class GameMap:
             radius=blue_cfg.get('radius', 6),
             pillars=blue_cfg.get('pillars'),
             pillar_height=blue_cfg.get('pillar_height', 5),
+            reload_radius=blue_cfg.get('reload_radius'),
         )
 
         # 掩体
@@ -45,6 +47,13 @@ class GameMap:
             ground_size,
             map_data.get('boundary', {})
         )
+
+        # Goal 圆柱
+        from arena.goal import Goal
+        self.goals = []
+        for i, g in enumerate(map_data.get('goals', [])):
+            goal = Goal(goal_id=g.get('id', i+1), position=g['position'])
+            self.goals.append(goal)
 
     def _generate_cover(self, cover_list):
         """从地图数据生成掩体"""
@@ -98,3 +107,7 @@ class GameMap:
         for wall in self.boundary_walls:
             destroy(wall)
         self.boundary_walls = []
+        # 清理 Goal
+        for goal in self.goals:
+            destroy(goal)
+        self.goals = []
