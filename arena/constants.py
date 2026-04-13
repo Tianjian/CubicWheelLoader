@@ -34,7 +34,7 @@ _DEFAULTS = {
            'shoot_spread': 0.05, 'shoot_interval': 0.4, 'patrol_arrive_distance': 2,
            'avoid_duration': 1.0, 'use_subprocess': False, 'subprocess_timeout': 0.005,
            'low_ammo_threshold': 3, 'strafe_enabled': True, 'los_check_enabled': True,
-           'goal_shoot_spread_multiplier': 0.5},
+           'goal_shoot_spread_multiplier': 0.5, 'avoid_navigate_timeout': 3.0},
     'match': {'duration': 300, 'kill_score': 0, 'goal_score': 10, 'goal_hit_window': 7, 'timer_warning_seconds': 30},
     'camera': {'distance': 40, 'height': 15, 'fov_tps': 60, 'fov_far': 45,
                'transition_speed': 10, 'fov_spectator': 45, 'follow_enable_delay': 0.3},
@@ -132,6 +132,7 @@ class Config:
     AI_STRAFE_ENABLED = _settings['ai'].get('strafe_enabled', True)
     AI_LOS_CHECK_ENABLED = _settings['ai'].get('los_check_enabled', True)
     AI_GOAL_SHOOT_SPREAD_MULT = _settings['ai'].get('goal_shoot_spread_multiplier', 0.5)
+    AI_AVOID_NAVIGATE_TIMEOUT = _settings['ai'].get('avoid_navigate_timeout', 3.0)
 
     # AI 子进程
     AI_USE_SUBPROCESS = _settings['ai']['use_subprocess']

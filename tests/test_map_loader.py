@@ -38,7 +38,8 @@ class TestLoadMap:
         """加载实际的 arena_classic.json"""
         data = load_map("arena_classic")
         assert data["name"] == "Arena Classic"
-        assert len(data["cover"]) == 12
+        assert len(data["cover"]) == 4
+        assert len(data["goals"]) == 4
 
     def test_load_default_map(self):
         """加载默认地图（arena_classic）"""

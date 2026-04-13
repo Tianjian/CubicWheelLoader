@@ -357,12 +357,12 @@ class GameManager(Entity):
                 ray = raycast(player.position, player.forward,
                               distance=move_distance, ignore=move_ignore, debug=False)
                 if ray.hit:
-                    # 通知 AIController 进入回避模式
-                    if hasattr(player.controller, 'avoiding'):
-                        import random as _rand
-                        player.controller.avoiding = True
-                        player.controller.avoid_end_time = time.time() + Config.AI_AVOID_DURATION
-                        player.controller.avoid_direction = 1 if _rand.random() > 0.5 else -1
+                    # 通知 AIController 计算绕行路径
+                    if hasattr(player.controller, 'on_collision'):
+                        obstacle_pos = ray.entity.position if hasattr(ray.entity, 'position') else ray.world_point
+                        look_at = cmd.get('look_at', (0, 0))
+                        target_pos = (look_at[0], 0, look_at[1])
+                        player.controller.on_collision(obstacle_pos, target_pos)
                     return  # 不移动
             player.position += player.forward * move_distance
 

@@ -36,7 +36,8 @@
         "low_ammo_threshold": 3,
         "strafe_enabled": true,
         "los_check_enabled": true,
-        "goal_shoot_spread_multiplier": 0.5
+        "goal_shoot_spread_multiplier": 0.5,
+        "avoid_navigate_timeout": 3.0
     },
     "match": {
         "duration": 300,
