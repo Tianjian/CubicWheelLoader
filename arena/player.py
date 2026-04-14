@@ -148,7 +148,7 @@ class Player(Entity):
         self.weapon.reload()
         self._update_ammo_display()
         self.position = Vec3(self.spawn_position)
-        self.rotation = Vec3(0, 0, 0)
+        self.rotation_y = 180 if self.team == Team.BLUE else 0
         self.visible = True
 
         # 进入重生无敌状态

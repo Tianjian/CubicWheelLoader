@@ -1,5 +1,5 @@
 from ursina import *
-from arena.constants import CameraMode, Config
+from arena.constants import CameraMode, Config, Team
 
 
 class CameraController(Entity):
@@ -18,6 +18,9 @@ class CameraController(Entity):
         self.camera_height = Config.CAMERA_HEIGHT
         self.fov = Config.CAMERA_FOV_TPS
         self.transition_speed = Config.CAMERA_TRANSITION_SPEED
+
+        # 根据队伍决定 z 轴偏移方向：红方面朝 +z，蓝方面朝 -z
+        self.z_sign = 1 if self.target.team == Team.RED else -1
 
     def set_far(self, far):
         """切换近/远视角"""
@@ -49,11 +52,12 @@ class CameraController(Entity):
         """恢复 TPS 视角"""
         camera.parent = scene
         # 一次性设置位置和旋转，避免 lerp 过渡期间 look_at 倾斜
-        target_position = self.target.position + Vec3(0, self.camera_height, -self.camera_distance)
+        target_position = self.target.position + Vec3(0, self.camera_height, -self.camera_distance * self.z_sign)
         camera.position = target_position
-        look_target = self.target.position + Vec3(0, 1.5, 10)
+        look_target = self.target.position + Vec3(0, 1.5, 10 * self.z_sign)
         camera.look_at(look_target)
-        camera.animate('fov', self.fov, duration=0.3)
+        camera.rotation_z = 0  # 修正 look_at 产生的 roll
+        camera.rotation_z = 0  # 修正 look_at 产生的 roll
         # 延迟一帧后再启用跟随，确保位置和旋转已稳定
         self._pending_enable = True
         invoke(self._enable_follow, delay=Config.CAMERA_FOLLOW_ENABLE_DELAY)
@@ -72,11 +76,13 @@ class CameraController(Entity):
 
     def _update_camera(self):
         """更新 TPS 相机位置"""
-        target_position = self.target.position + Vec3(0, self.camera_height, -self.camera_distance)
+        target_position = self.target.position + Vec3(0, self.camera_height, -self.camera_distance * self.z_sign)
         camera.position = lerp(camera.position, target_position, self.transition_speed * time.dt)
 
-        look_target = self.target.position + Vec3(0, 1.5, 10)
+        look_target = self.target.position + Vec3(0, 1.5, 10 * self.z_sign)
         camera.look_at(look_target)
+        camera.rotation_z = 0  # 修正 look_at 产生的 roll
+        camera.rotation_z = 0  # 修正 look_at 产生的 roll
 
     def get_shoot_direction(self):
         """获取射击方向"""

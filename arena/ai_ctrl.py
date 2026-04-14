@@ -54,6 +54,9 @@ class AIController:
         self.nav_stuck_count = 0          # 连续碰撞同一障碍物计数
         self.nav_last_obstacle_pos = None # 上次碰撞的障碍物位置（防循环）
 
+        # Goal 射击协调（避免队友同时射击同一个 Goal）
+        self.current_target_goal_id = None  # 当前正在射击的 Goal ID
+
         # 射击节流
         self.last_shoot_time = 0
         self.shoot_interval = Config.AI_SHOOT_INTERVAL
@@ -79,6 +82,9 @@ class AIController:
     def _state_machine(self):
         """AI 行为状态机"""
         my_pos = (self.player.x, self.player.y, self.player.z)
+
+        # 非射击 Goal 状态时清除目标声明
+        self.current_target_goal_id = None
 
         # 1. 弹药耗尽 → 强制回基地
         if self.player.weapon.current_ammo <= 0:
@@ -183,6 +189,7 @@ class AIController:
         self.nav_waypoint = None
         self.nav_target_pos = None
         self.nav_stuck_count = 0
+        self.current_target_goal_id = None
 
     def _compute_detour_waypoint(self, obstacle_pos, target_pos):
         """计算障碍物两侧的绕行路径点，选择离目标更近的一侧"""
@@ -252,10 +259,20 @@ class AIController:
     # ==================== Goal 射击 ====================
 
     def _find_shootable_goal(self):
-        """找到最近的可见且值得射击的 Goal"""
+        """找到最近的可见且值得射击的 Goal（排除队友正在射击的 Goal）"""
         from arena.game_manager import game_manager
+        from ursina import Vec3
         goals = getattr(game_manager.game_map, 'goals', [])
         my_pos = (self.player.x, self.player.y, self.player.z)
+
+        # 收集队友正在射击的 Goal ID
+        teammate_target_ids = set()
+        for p in game_manager.players:
+            if (p != self.player and p.team == self.player.team
+                    and hasattr(p, 'controller') and hasattr(p.controller, 'current_target_goal_id')
+                    and p.controller.current_target_goal_id is not None):
+                teammate_target_ids.add(p.controller.current_target_goal_id)
+
         best = None
         best_dist = float('inf')
 
@@ -263,15 +280,18 @@ class AIController:
             if goal.owner == self.player.team:
                 continue
 
+            # 队友已在射击此 Goal → 跳过，节省弹药
+            if goal.goal_id in teammate_target_ids:
+                continue
+
             goal_pos = goal.position
             d = dist_3d(my_pos, (goal_pos.x, goal_pos.y, goal_pos.z))
 
-            # 射程检测（子弹射程短，需靠近）
-            if d > Config.BULLET_MAX_DISTANCE * 1.5:
+            # 射程检测：必须在子弹射程内才射击，否则浪费弹药
+            if d > Config.BULLET_MAX_DISTANCE * 0.9:
                 continue
 
             # 视线检测
-            from ursina import Vec3
             if not self._has_line_of_sight(goal_pos + Vec3(0, 1.5, 0)):
                 continue
 
@@ -279,11 +299,27 @@ class AIController:
                 best_dist = d
                 best = goal
 
+        # 如果所有可射击 Goal 都被队友占了，放弃排他（总比不射击好）
+        if best is None and goals:
+            for goal in goals:
+                if goal.owner == self.player.team:
+                    continue
+                goal_pos = goal.position
+                d = dist_3d(my_pos, (goal_pos.x, goal_pos.y, goal_pos.z))
+                if d > Config.BULLET_MAX_DISTANCE * 0.9:
+                    continue
+                if not self._has_line_of_sight(goal_pos + Vec3(0, 1.5, 0)):
+                    continue
+                if d < best_dist:
+                    best_dist = d
+                    best = goal
+
         return best
 
     def _shoot_goal(self, goal):
         """射击 Goal"""
         self.state = 'shoot_goal'
+        self.current_target_goal_id = goal.goal_id  # 声明目标，供队友协调
         result = {
             'look_at': (goal.position.x, goal.position.z),
             'move_fwd': 0.3,

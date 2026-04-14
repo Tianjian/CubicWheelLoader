@@ -40,8 +40,8 @@
         "avoid_navigate_timeout": 3.0
     },
     "match": {
-        "duration": 300,
-        "kill_score": 0,
+        "duration": 120,
+        "kill_score": 3,
         "goal_score": 10,
         "goal_hit_window": 7,
         "timer_warning_seconds": 30

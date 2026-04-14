@@ -54,8 +54,8 @@ class GameManager(Entity):
         self.players = [
             Player(player_id=1, team=Team.RED, spawn_position=red_spawn + Vec3(-2, 0, 0)),
             Player(player_id=2, team=Team.RED, spawn_position=red_spawn + Vec3(2, 0, 0)),
-            Player(player_id=3, team=Team.BLUE, spawn_position=blue_spawn + Vec3(-2, 0, 0)),
-            Player(player_id=4, team=Team.BLUE, spawn_position=blue_spawn + Vec3(2, 0, 0)),
+            Player(player_id=3, team=Team.BLUE, spawn_position=blue_spawn + Vec3(-2, 0, 0), rotation_y=180),
+            Player(player_id=4, team=Team.BLUE, spawn_position=blue_spawn + Vec3(2, 0, 0), rotation_y=180),
         ]
 
         # 分配控制器
@@ -128,7 +128,9 @@ class GameManager(Entity):
 
     def on_player_killed(self, killer, victim):
         """击杀事件"""
-        # 击杀不再加分
+        # 击杀加分
+        if Config.KILL_SCORE > 0:
+            self.score_system.add_score(killer.team, Config.KILL_SCORE)
 
         # 击杀音效（人类玩家击杀时播放）
         if killer == self.human_player:
@@ -147,23 +149,6 @@ class GameManager(Entity):
     def on_goal_owner_changed(self):
         """Goal 占领方变化时更新实时比分"""
         self.score_system.update_from_goals(self.game_map.goals)
-        # 更新 HUD Goal 状态
-        self._update_goal_status()
-
-    def _update_goal_status(self):
-        """更新 HUD 的 Goal 占领状态显示"""
-        from arena.hud import hud
-        if not hud.goal_status_text:
-            return
-        status_parts = []
-        for goal in self.game_map.goals:
-            if goal.owner == Team.RED:
-                status_parts.append('●')
-            elif goal.owner == Team.BLUE:
-                status_parts.append('◆')
-            else:
-                status_parts.append('○')
-        hud.goal_status_text.text = '  '.join(status_parts)
 
     def _on_human_dead(self):
         """人类玩家死亡"""
@@ -179,14 +164,9 @@ class GameManager(Entity):
         # 比赛结束音效
         sound_manager.play_match_end()
 
-        # 从 Goal 计算结算分数
-        red_score = 0
-        blue_score = 0
-        for goal in self.game_map.goals:
-            if goal.owner == Team.RED:
-                red_score += Config.GOAL_SCORE
-            elif goal.owner == Team.BLUE:
-                blue_score += Config.GOAL_SCORE
+        # 结算总分（含击杀分 + 目标分）
+        red_score = self.score_system.get_score(Team.RED)
+        blue_score = self.score_system.get_score(Team.BLUE)
 
         if red_score > blue_score:
             winner = "RED TEAM WINS!"

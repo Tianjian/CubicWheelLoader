@@ -15,7 +15,6 @@ class HUD:
         self.controls_text = None
         self.ground_crosshair = None
         self.ammo_text = None
-        self.goal_status_text = None
 
     def create(self):
         """创建所有 HUD 元素"""
@@ -67,15 +66,6 @@ class HUD:
             origin=(0, 0),
             scale=1,
             color=color.yellow,
-            parent=camera.ui
-        )
-
-        # Goal 占领状态
-        self.goal_status_text = Text(
-            text='● ○ ● ○',
-            position=(0, 0.39),
-            origin=(0, 0),
-            scale=1,
             parent=camera.ui
         )
 
@@ -158,7 +148,7 @@ class HUD:
         """销毁所有 HUD 元素"""
         for attr in ('score_text', 'timer_text', 'hp_bg', 'hp_bar',
                      'stats_text', 'identity_text', 'controls_text',
-                     'ground_crosshair', 'ammo_text', 'goal_status_text'):
+                     'ground_crosshair', 'ammo_text'):
             obj = getattr(self, attr, None)
             if obj:
                 destroy(obj)

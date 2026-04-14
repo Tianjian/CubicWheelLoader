@@ -24,70 +24,14 @@ class CameraMode(Enum):
     THIRD_PERSON = "third_person"
 
 
-# ==================== 默认配置（JSON 文件不存在时使用） ====================
-_DEFAULTS = {
-    'player': {'max_hp': 100, 'scale': 1, 'respawn_delay': 3.0, 'invincible_duration': 2.0},
-    'weapon': {'bullet_damage': 30, 'bullet_speed': 35, 'fire_rate': 0.15, 'muzzle_flash_duration': 0.05, 'max_ammo': 10},
-    'bullet': {'max_distance': 5, 'scale': 0.3, 'speed_multiplier': 1.5},
-    'human': {'move_speed': 8, 'rotation_speed': 120, 'input_deadzone': 0.05},
-    'ai': {'move_speed': 6, 'rotation_speed': 90, 'detection_range': 40, 'attack_range': 25,
-           'shoot_spread': 0.05, 'shoot_interval': 0.4, 'patrol_arrive_distance': 2,
-           'avoid_duration': 1.0, 'use_subprocess': False, 'subprocess_timeout': 0.005,
-           'low_ammo_threshold': 3, 'strafe_enabled': True, 'los_check_enabled': True,
-           'goal_shoot_spread_multiplier': 0.5, 'avoid_navigate_timeout': 3.0},
-    'match': {'duration': 300, 'kill_score': 0, 'goal_score': 10, 'goal_hit_window': 7, 'timer_warning_seconds': 30},
-    'camera': {'distance': 40, 'height': 15, 'fov_tps': 60, 'fov_far': 45,
-               'transition_speed': 10, 'fov_spectator': 45, 'follow_enable_delay': 0.3},
-    'gamepad': {'shoot_threshold': 0.3},
-    'map': {'default_name': 'arena_classic'},
-    'sound': {
-        'master_volume': 0.8, 'max_concurrent': 6, 'ai_sound_throttle': 0.3,
-        'shoot_full_distance': 15, 'shoot_mute_distance': 40,
-        'shoot': {'file': 'shoot', 'volume': 0.35, 'pitch_range': [0.9, 1.1], 'duration': 0.3},
-        'hit_player': {'file': 'hit_player', 'volume': 0.25, 'pitch_range': [1.0, 1.2], 'duration': 0.2},
-        'hit_wall': {'file': 'hit_wall', 'volume': 0.15, 'pitch_range': [0.8, 1.0], 'duration': 0.15},
-        'hit_goal': {'file': 'hit_goal', 'volume': 0.25, 'pitch_range': [1.0, 1.1], 'duration': 0.4},
-        'damage': {'file': 'damage', 'volume': 0.3, 'pitch_range': [0.9, 1.0], 'duration': 0.4},
-        'death': {'file': 'death', 'volume': 0.3, 'pitch_range': [0.8, 0.9], 'duration': 0.8},
-        'kill': {'file': 'kill', 'volume': 0.2, 'pitch_range': [1.0, 1.0], 'duration': 0.4},
-        'countdown': {'file': 'countdown', 'volume': 0.3, 'pitch_range': [1.0, 1.0], 'duration': 0.2},
-        'match_start': {'file': 'match_start', 'volume': 0.35, 'pitch_range': [1.0, 1.0], 'duration': 0.6},
-        'match_end': {'file': 'match_end', 'volume': 0.35, 'pitch_range': [1.0, 1.0], 'duration': 0.8},
-    },
-}
-
-
-def _deep_merge(base, override):
-    """深层合并字典：override 中的值覆盖 base，dict 类型递归合并"""
-    result = dict(base)
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
 def _load_settings():
-    """从 game_settings.json 加载配置，缺失字段用默认值（支持嵌套 dict 深层合并）"""
-    settings = {}
-    for section, defaults in _DEFAULTS.items():
-        settings[section] = dict(defaults)
-
+    """从 game_settings.json 加载配置"""
     json_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'game_settings.json')
-    if os.path.exists(json_path):
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                user_settings = json.load(f)
-            for section, values in user_settings.items():
-                if section in settings and isinstance(values, dict):
-                    settings[section] = _deep_merge(settings[section], values)
-                else:
-                    settings[section] = values
-        except (json.JSONDecodeError, IOError) as e:
-            print(f'[Config] Warning: Failed to load game_settings.json: {e}, using defaults')
-
-    return settings
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
+        raise RuntimeError(f'[Config] Failed to load game_settings.json: {e}') from e
 
 
 _settings = _load_settings()
@@ -107,7 +51,7 @@ class Config:
     BULLET_SPEED = _settings['weapon']['bullet_speed']
     FIRE_RATE = _settings['weapon']['fire_rate']
     MUZZLE_FLASH_DURATION = _settings['weapon']['muzzle_flash_duration']
-    WEAPON_MAX_AMMO = _settings['weapon'].get('max_ammo', 10)
+    WEAPON_MAX_AMMO = _settings['weapon']['max_ammo']
 
     # 子弹
     BULLET_MAX_DISTANCE = _settings['bullet']['max_distance']
@@ -128,11 +72,11 @@ class Config:
     AI_SHOOT_INTERVAL = _settings['ai']['shoot_interval']
     AI_PATROL_ARRIVE_DISTANCE = _settings['ai']['patrol_arrive_distance']
     AI_AVOID_DURATION = _settings['ai']['avoid_duration']
-    AI_LOW_AMMO_THRESHOLD = _settings['ai'].get('low_ammo_threshold', 3)
-    AI_STRAFE_ENABLED = _settings['ai'].get('strafe_enabled', True)
-    AI_LOS_CHECK_ENABLED = _settings['ai'].get('los_check_enabled', True)
-    AI_GOAL_SHOOT_SPREAD_MULT = _settings['ai'].get('goal_shoot_spread_multiplier', 0.5)
-    AI_AVOID_NAVIGATE_TIMEOUT = _settings['ai'].get('avoid_navigate_timeout', 3.0)
+    AI_LOW_AMMO_THRESHOLD = _settings['ai']['low_ammo_threshold']
+    AI_STRAFE_ENABLED = _settings['ai']['strafe_enabled']
+    AI_LOS_CHECK_ENABLED = _settings['ai']['los_check_enabled']
+    AI_GOAL_SHOOT_SPREAD_MULT = _settings['ai']['goal_shoot_spread_multiplier']
+    AI_AVOID_NAVIGATE_TIMEOUT = _settings['ai']['avoid_navigate_timeout']
 
     # AI 子进程
     AI_USE_SUBPROCESS = _settings['ai']['use_subprocess']
@@ -141,8 +85,8 @@ class Config:
     # 比赛规则
     MATCH_DURATION = _settings['match']['duration']
     KILL_SCORE = _settings['match']['kill_score']
-    GOAL_SCORE = _settings['match'].get('goal_score', 10)
-    GOAL_HIT_WINDOW = _settings['match'].get('goal_hit_window', 7)
+    GOAL_SCORE = _settings['match']['goal_score']
+    GOAL_HIT_WINDOW = _settings['match']['goal_hit_window']
     TIMER_WARNING_SECONDS = _settings['match']['timer_warning_seconds']
 
     # 相机

@@ -376,3 +376,26 @@ class TestAIControllerDecision:
         assert result['look_at'] is not None
         assert result['move_fwd'] == 1.0
         assert result['request_raycast'] is True
+
+    def test_current_target_goal_id_set_when_shooting_goal(self, ai_ctrl):
+        """射击 Goal 时声明 current_target_goal_id"""
+        assert ai_ctrl.current_target_goal_id is None
+
+        # 模拟一个 Goal 对象
+        class MockGoal:
+            goal_id = 3
+            position = Vec3(3, 0, -24)
+            owner = None  # 不属于己方
+
+        ai_ctrl._shoot_goal(MockGoal())
+        assert ai_ctrl.current_target_goal_id == 3
+
+    def test_current_target_goal_id_cleared_in_other_states(self, ai_ctrl):
+        """非射击 Goal 状态时清除 current_target_goal_id"""
+        ai_ctrl.current_target_goal_id = 3
+        ai_ctrl.patrol_points = [Vec3(-10, 0, -20), Vec3(10, 0, -20)]
+        ai_ctrl._find_nearest_visible_enemy = lambda: None
+        ai_ctrl._find_shootable_goal = lambda: None
+
+        ai_ctrl.update()
+        assert ai_ctrl.current_target_goal_id is None
