@@ -37,13 +37,8 @@ class HUD:
             parent=camera.ui
         )
 
-        # 玩家血条背景
-        self.hp_bg = Entity(
-            parent=camera.ui, model='quad',
-            position=(0, -0.35), scale=(0.4, 0.025),
-            color=color.dark_gray
-        )
-        # 玩家血条前景
+        # 玩家血条（无背景，避免闪烁）
+        self.hp_bg = None
         self.hp_bar = Entity(
             parent=camera.ui, model='quad',
             position=(0, -0.35), scale=(0.4, 0.02),
@@ -96,42 +91,55 @@ class HUD:
         )
 
     def update_player_info(self, player):
-        """更新人类玩家的 HUD 信息"""
+        """更新人类玩家的 HUD 信息（带脏检查，避免每帧重建字符串）"""
         if not player:
             return
 
-        # 身份
-        team_label = 'RED' if player.team.value == 'red' else 'BLUE'
-        self.identity_text.text = f'P{player.player_id} - {team_label} TEAM'
-        self.identity_text.color = color.red if player.team.value == 'red' else color.azure
+        # 身份（通常不变，仅首次设置）
+        if self.identity_text.text != f'P{player.player_id} - {"RED" if player.team.value == "red" else "BLUE"} TEAM':
+            team_label = 'RED' if player.team.value == 'red' else 'BLUE'
+            self.identity_text.text = f'P{player.player_id} - {team_label} TEAM'
+            self.identity_text.color = color.red if player.team.value == 'red' else color.azure
 
         # 血条
         ratio = max(0, player.hp / player.max_hp)
-        self.hp_bar.scale_x = 0.4 * ratio
-        if ratio > 0.5:
-            self.hp_bar.color = color.green
-        elif ratio > 0.25:
-            self.hp_bar.color = color.yellow
-        else:
-            self.hp_bar.color = color.red
+        target_scale_x = 0.4 * ratio
+        if abs(self.hp_bar.scale_x - target_scale_x) > 0.005:
+            self.hp_bar.scale_x = target_scale_x
+            if ratio > 0.5:
+                self.hp_bar.color = color.green
+            elif ratio > 0.25:
+                self.hp_bar.color = color.yellow
+            else:
+                self.hp_bar.color = color.red
 
-        # 战绩
-        self.stats_text.text = f'K: {player.kills}  D: {player.deaths}'
+        # 战绩（脏检查）
+        new_stats = f'K: {player.kills}  D: {player.deaths}'
+        if self.stats_text.text != new_stats:
+            self.stats_text.text = new_stats
 
-        # 弹药
+        # 弹药（脏检查）
         if hasattr(player, 'weapon') and hasattr(player.weapon, 'current_ammo'):
             ammo = player.weapon.current_ammo
             max_ammo = player.weapon.max_ammo
-            self.ammo_text.text = f'AMMO: {ammo}/{max_ammo}'
-            self.ammo_text.color = color.yellow if ammo > 3 else color.red
+            new_ammo = f'AMMO: {ammo}/{max_ammo}'
+            if self.ammo_text.text != new_ammo:
+                self.ammo_text.text = new_ammo
+                self.ammo_text.color = color.yellow if ammo > 3 else color.red
 
         # 地面准星
         if player.state.value == 'alive':
-            self.ground_crosshair.position = player.position + player.forward * 10
-            self.ground_crosshair.y = 0.1
-            self.ground_crosshair.enabled = True
+            new_pos = player.position + player.forward * 10
+            # 仅在位置变化超过阈值时更新
+            cur = self.ground_crosshair.position
+            if abs(new_pos.x - cur.x) > 0.3 or abs(new_pos.z - cur.z) > 0.3:
+                self.ground_crosshair.position = new_pos
+                self.ground_crosshair.y = 0.1
+            if not self.ground_crosshair.enabled:
+                self.ground_crosshair.enabled = True
         else:
-            self.ground_crosshair.enabled = False
+            if self.ground_crosshair.enabled:
+                self.ground_crosshair.enabled = False
 
     def show_respawn_hint(self, remaining):
         """显示重生倒计时"""

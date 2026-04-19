@@ -19,12 +19,26 @@ class Goal(Entity):
         self.hit_history = []
         self.owner = None
         self._hit_window = Config.GOAL_HIT_WINDOW
+        # 增量计数，避免每次 count() 遍历
+        self._red_count = 0
+        self._blue_count = 0
 
     def on_bullet_hit(self, team):
         """子弹命中时调用"""
+        # 如果窗口满了，弹出最老的记录并减计数
+        if len(self.hit_history) >= self._hit_window:
+            oldest = self.hit_history.pop(0)
+            if oldest == Team.RED:
+                self._red_count -= 1
+            elif oldest == Team.BLUE:
+                self._blue_count -= 1
+
         self.hit_history.append(team)
-        if len(self.hit_history) > self._hit_window:
-            self.hit_history.pop(0)
+        if team == Team.RED:
+            self._red_count += 1
+        else:
+            self._blue_count += 1
+
         self._update_owner()
         # 命中闪白反馈
         original = self.color
@@ -32,13 +46,11 @@ class Goal(Entity):
         self.animate_color(original, duration=0.1)
 
     def _update_owner(self):
-        """根据 hit_history 统计占领方"""
-        red_count = self.hit_history.count(Team.RED)
-        blue_count = self.hit_history.count(Team.BLUE)
+        """根据增量计数判断占领方（避免 count() 遍历）"""
         old_owner = self.owner
-        if red_count > blue_count:
+        if self._red_count > self._blue_count:
             self.owner = Team.RED
-        elif blue_count > red_count:
+        elif self._blue_count > self._red_count:
             self.owner = Team.BLUE
         else:
             self.owner = None
@@ -59,5 +71,7 @@ class Goal(Entity):
     def reset(self):
         """重置占领状态"""
         self.hit_history.clear()
+        self._red_count = 0
+        self._blue_count = 0
         self.owner = None
         self.color = color.white

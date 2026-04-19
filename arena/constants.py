@@ -85,6 +85,8 @@ class Config:
     AI_DEFENDER_URGENCY_MULT = _settings['ai']['defender_urgency_multiplier']
     AI_SHOOTABLE_GOAL_MULT = _settings['ai']['shootable_goal_multiplier']
     AI_TEAMMATE_TARGET_PENALTY = _settings['ai']['teammate_target_penalty']
+    AI_AGGRO_RANGE = _settings['ai']['aggro_range']
+    AI_AGGRO_MULT = _settings['ai']['aggro_multiplier']
 
     # 比赛规则
     MATCH_DURATION = _settings['match']['duration']

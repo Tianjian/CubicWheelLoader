@@ -446,7 +446,7 @@ class TestEvaluateTargets:
 
     def test_empty_when_no_targets(self, ai_ctrl):
         """无目标时返回空列表"""
-        ai_ctrl._get_teammate_target_ids = lambda: set()
+        ai_ctrl._get_teammate_targets = lambda: (set(), set())
         # Mock game_manager 返回空目标
         import arena.game_manager as gm_mod
         original_gm = gm_mod.game_manager
@@ -483,6 +483,7 @@ class TestEvaluateTargets:
             current_ammo = 3
 
         class MockPlayer:
+            player_id = 99
             team = Team.BLUE
             state = PlayerState.ALIVE
             position = Vec3(10, 0, 10)
@@ -492,7 +493,7 @@ class TestEvaluateTargets:
             game_map = MockMap()
             players = [MockPlayer()]
 
-        ai_ctrl._get_teammate_target_ids = lambda: set()
+        ai_ctrl._get_teammate_targets = lambda: (set(), set())
         ai_ctrl._has_line_of_sight = lambda pos: True
         gm_mod.game_manager = MockGM()
         try:
@@ -521,6 +522,7 @@ class TestEvaluateTargets:
             current_ammo = Config.AI_HIGH_AMMO_THRESHOLD  # 高弹药
 
         class MockEnemy:
+            player_id = 99
             team = Team.BLUE
             state = PlayerState.ALIVE
             position = Vec3(1, 0, -3)  # RED 本方半场 (z<0)
@@ -530,7 +532,7 @@ class TestEvaluateTargets:
             game_map = MockMap()
             players = [MockEnemy()]
 
-        ai_ctrl._get_teammate_target_ids = lambda: set()
+        ai_ctrl._get_teammate_targets = lambda: (set(), set())
         ai_ctrl._has_line_of_sight = lambda pos: True
         gm_mod.game_manager = MockGM()
         try:

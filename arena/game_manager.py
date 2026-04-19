@@ -26,6 +26,8 @@ class GameManager(Entity):
         self.camera_controller = None
         self.game_map = None
         self.input_manager = None
+        # HUD 更新节流计数器
+        self._hud_counter = 0
 
 
     def start_match(self, selected_player_id, map_name=None):
@@ -59,12 +61,27 @@ class GameManager(Entity):
         ]
 
         # 分配控制器
+        ai_index = 0
+        team_ai_count = {}  # 每个队伍的AI计数，用于分配相反巡逻方向
         for i, player in enumerate(self.players):
             if i == selected_player_id:
                 player.controller = HumanController(player, self.input_manager)
                 self.human_player = player
             else:
                 player.controller = AIController(player)
+                # 为每个AI分配不同的节流偏移（0/1/2），确保决策帧错开
+                offset = ai_index % 3
+                player.controller._throttle_offset = offset
+                # counter初始值=2-offset，使首次update(counter+1+offset)%3==0
+                player.controller._frame_counter = 2 - offset
+                ai_index += 1
+
+                # 同队第二个AI巡逻方向取反，避免同队AI路线完全相同
+                team_key = player.team
+                team_ai_count[team_key] = team_ai_count.get(team_key, 0) + 1
+                if team_ai_count[team_key] % 2 == 0:
+                    player.controller._patrol_direction = -1
+                    player.controller.current_patrol_idx = -1  # 从末尾开始
 
         # 创建相机控制器
         self.camera_controller = CameraController(self.human_player)
@@ -272,8 +289,9 @@ class GameManager(Entity):
                     self._apply_ai_command(player, cmd)
                     player._pending_ai_cmd = None
 
-            # 更新 HUD
-            if self.human_player:
+            # 更新 HUD（每3帧一次，减少UI开销）
+            self._hud_counter += 1
+            if self.human_player and self._hud_counter % 3 == 0:
                 hud.update_player_info(self.human_player)
 
     @staticmethod

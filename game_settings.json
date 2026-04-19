@@ -7,8 +7,8 @@
     },
     "weapon": {
         "bullet_damage": 15,
-        "bullet_speed": 35,
-        "fire_rate": 0.15,
+        "bullet_speed": 18,
+        "fire_rate": 0.5,
         "muzzle_flash_duration": 0.05,
         "max_ammo": 10
     },
@@ -29,7 +29,7 @@
         "attack_range": 25,
         "shoot_spread": 0.05,
         "shoot_interval": 0.4,
-        "patrol_arrive_distance": 2,
+        "patrol_arrive_distance": 5.5,
         "avoid_duration": 1.0,
         "low_ammo_threshold": 3,
         "strafe_enabled": true,
@@ -41,7 +41,9 @@
         "high_ammo_threshold": 7,
         "defender_urgency_multiplier": 4.0,
         "shootable_goal_multiplier": 1.5,
-        "teammate_target_penalty": 0.3
+        "teammate_target_penalty": 0.3,
+        "aggro_range": 35,
+        "aggro_multiplier": 2.5
     },
     "match": {
         "duration": 120,

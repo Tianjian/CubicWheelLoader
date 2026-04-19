@@ -43,6 +43,9 @@ class Player(Entity):
         self.destroyed = False
         self._pending_ai_cmd = None
 
+        # 基地装填检测节流
+        self._base_reload_counter = 0
+
         # 武器
         from arena.weapon import Weapon
         self.weapon = Weapon(
@@ -58,16 +61,14 @@ class Player(Entity):
             fire_rate=Config.FIRE_RATE
         )
 
-        # 血条背景
-        self.health_bar_bg = Entity(
-            parent=self, y=2, model='quad',
-            color=color.dark_gray, world_scale=(1.5, 0.15)
-        )
-        # 血条前景
+        # 血条（无背景，避免 Z-fighting）
+        self.health_bar_bg = None
         self.health_bar = Entity(
             parent=self, y=2, model='quad',
-            color=color.green, world_scale=(1.5, 0.1)
+            color=color.green, scale=(1.5, 0.1),
+            billboard=True, unlit=True, double_sided=True
         )
+        self.health_bar.cull = False
 
         # 名字标签
         team_label = 'RED' if team == Team.RED else 'BLUE'
@@ -78,7 +79,8 @@ class Player(Entity):
             scale=12,
             origin=(0, 0),
             billboard=True,
-            color=team_color
+            color=team_color,
+            z=-0.01
         )
 
         # 弹药显示（血条下方，数字形式）
@@ -89,7 +91,8 @@ class Player(Entity):
             scale=10,
             origin=(0, 0),
             billboard=True,
-            color=color.yellow
+            color=color.yellow,
+            z=-0.01
         )
 
     def take_damage(self, damage, attacker):
@@ -107,7 +110,7 @@ class Player(Entity):
             sound_manager.play_damage()
         # 更新血条
         ratio = max(0, self.hp / self.max_hp)
-        self.health_bar.world_scale_x = ratio * 1.5
+        self.health_bar.scale_x = ratio * 1.5
         # 血条变色
         if ratio > 0.5:
             self.health_bar.color = color.green
@@ -143,7 +146,7 @@ class Player(Entity):
         if self.destroyed:
             return
         self.hp = self.max_hp
-        self.health_bar.world_scale_x = 1.5
+        self.health_bar.scale_x = 1.5
         self.health_bar.color = color.green
         self.weapon.reload()
         self._update_ammo_display()
@@ -189,8 +192,10 @@ class Player(Entity):
             return
 
         if self.state == PlayerState.ALIVE and self.controller:
-            # 基地装填检测
-            self._check_base_reload()
+            # 基地装填检测（每10帧检测一次，减少distance调用）
+            self._base_reload_counter += 1
+            if self._base_reload_counter % 10 == 0:
+                self._check_base_reload()
             # 更新弹药显示
             self._update_ammo_display()
             # AI 控制器返回决策字典（由 GameManager 统一应用）

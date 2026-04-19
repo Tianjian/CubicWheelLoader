@@ -43,6 +43,7 @@ class AIController:
 
         self.patrol_points = []
         self.current_patrol_idx = 0
+        self._patrol_direction = 1  # 1=正序, -1=逆序（同队AI方向相反）
         self.state = 'patrol'
         self.target = None
 
@@ -56,6 +57,8 @@ class AIController:
 
         # Goal 射击协调（避免队友同时射击同一个 Goal）
         self.current_target_goal_id = None  # 当前正在射击的 Goal ID
+        # Player 目标协调（避免队友同时攻击同一个敌人）
+        self.current_target_player_id = None
 
         # 射击节流
         self.last_shoot_time = 0
@@ -68,32 +71,53 @@ class AIController:
         # 视线检测缓存
         self._los_cache = {}
 
+        # AI 帧间隔节流（降低决策频率，3帧1次）
+        # _throttle_offset 由 GameManager 设置，保证各AI错开（0/1/2）
+        # _frame_counter 初始值使得第一次 update(+1后) 命中决策帧
+        self._throttle_offset = 0
+        self._frame_counter = 2  # 首次update: 2+1=3, (3+0)%3==0 → 立即执行
+        self._last_decision = {}  # 缓存上一次决策结果
+
     def update(self):
-        """纯计算，返回决策字典"""
+        """纯计算，返回决策字典（带帧间隔节流）"""
         if self.player.state.value != 'alive':
             return {}
 
-        # 绕行优先
+        # 绕行优先（绕行时也需要节流，但间隔短一些）
         if self.navigating:
-            return self._navigate()
+            self._frame_counter += 1
+            if (self._frame_counter + self._throttle_offset) % 2 != 0:
+                return self._last_decision if self._last_decision else self._navigate()
+            result = self._navigate()
+            self._last_decision = result
+            return result
 
-        return self._state_machine()
+        # AI 决策节流：每3帧才完整决策一次
+        # 偏移量保证各AI在不同帧执行，避免同时跳过
+        self._frame_counter += 1
+        if (self._frame_counter + self._throttle_offset) % 3 != 0:
+            return self._last_decision if self._last_decision else {}
+
+        result = self._state_machine()
+        self._last_decision = result
+        return result
 
     def _state_machine(self):
         """AI 行为状态机（评分驱动）"""
         self.current_target_goal_id = None
+        self.current_target_player_id = None
 
         # 1. 弹药耗尽 → 强制回基地（不可覆盖）
         if self.player.weapon.current_ammo <= 0:
             return self._reload()
 
-        # 2. 统一目标评分
+        # 2. 统一目标评分（返回评分+LOS快照）
         candidates = self._evaluate_targets()
 
         if not candidates:
             return self._patrol()
 
-        _, best_type, best_target = candidates[0]
+        _, best_type, best_target, best_los = candidates[0]
 
         # 3. 根据最高分目标决定行为
         if best_type == 'goal':
@@ -102,17 +126,16 @@ class AIController:
             my_pos = (self.player.x, 0, self.player.z)
             d = dist_3d(my_pos, goal_pos)
 
-            from ursina import Vec3
-            # 在射程内+有LOS → 射击Goal
-            if d <= Config.BULLET_MAX_DISTANCE * 0.9 and \
-               self._has_line_of_sight(goal.position + Vec3(0, 1.5, 0)):
-                return self._shoot_goal(goal)
+            # 在射程内+有LOS → 射击Goal（复用 _evaluate_targets 的 LOS 结果）
+            if d <= Config.BULLET_MAX_DISTANCE * 0.9 and best_los:
+                return self._shoot_goal(goal, los_confirmed=True)
             else:
                 # 不在射程 → 巡逻前往该Goal
                 return self._patrol_toward(goal.position)
 
         else:  # best_type == 'player'
             enemy = best_target
+            self.current_target_player_id = enemy.player_id
             my_pos = (self.player.x, self.player.y, self.player.z)
             enemy_pos = (enemy.position.x, enemy.position.y, enemy.position.z)
             d = dist_3d(my_pos, enemy_pos)
@@ -125,10 +148,11 @@ class AIController:
     # ==================== 统一目标评分 ====================
 
     def _evaluate_targets(self):
-        """统一目标评分，返回 [(score, target_type, target), ...] 按评分降序
+        """统一目标评分，返回 [(score, target_type, target, los), ...] 按评分降序
 
         target_type: 'goal' | 'player'
         target: Goal Entity | Player Entity
+        los: bool — 该目标是否通过 LOS 检测（复用给 _state_machine 避免重复 raycast）
         """
         from arena.game_manager import game_manager
         from ursina import Vec3
@@ -138,7 +162,7 @@ class AIController:
 
         # ---- Goal 候选 ----
         goals = getattr(game_manager.game_map, 'goals', [])
-        teammate_target_ids = self._get_teammate_target_ids()
+        teammate_goal_ids, teammate_player_ids = self._get_teammate_targets()
 
         for goal in goals:
             if goal.owner == self.player.team:
@@ -151,15 +175,17 @@ class AIController:
             score *= (1 + Config.AI_PROXIMITY_BOOST_K / (d + 1))
 
             # 射程内+有LOS 加成
+            has_los = False
             if d <= Config.BULLET_MAX_DISTANCE * 0.9:
-                if self._has_line_of_sight(goal.position + Vec3(0, 1.5, 0)):
+                has_los = self._has_line_of_sight(goal.position + Vec3(0, 1.5, 0))
+                if has_los:
                     score *= Config.AI_SHOOTABLE_GOAL_MULT
 
-            # 队友已锁定降权
-            if goal.goal_id in teammate_target_ids:
+            # 队友已锁定该Goal → 降权
+            if goal.goal_id in teammate_goal_ids:
                 score *= Config.AI_TEAMMATE_TARGET_PENALTY
 
-            candidates.append((score, 'goal', goal))
+            candidates.append((score, 'goal', goal, has_los))
 
         # ---- Player 候选 ----
         for p in game_manager.players:
@@ -187,7 +213,16 @@ class AIController:
                p.weapon.current_ammo >= Config.AI_HIGH_AMMO_THRESHOLD:
                 score *= Config.AI_DEFENDER_URGENCY_MULT
 
-            candidates.append((score, 'player', p))
+            # 攻击性加成：较近距离 + 敌方弹药超过半满 → 优先消灭威胁
+            if d <= Config.AI_AGGRO_RANGE and \
+               p.weapon.current_ammo >= Config.WEAPON_MAX_AMMO / 2:
+                score *= Config.AI_AGGRO_MULT
+
+            # 队友已锁定该敌人 → 降权，避免集中火力
+            if p.player_id in teammate_player_ids:
+                score *= Config.AI_TEAMMATE_TARGET_PENALTY
+
+            candidates.append((score, 'player', p, True))
 
         candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates
@@ -203,16 +238,28 @@ class AIController:
         else:
             return position.z > 0
 
-    def _get_teammate_target_ids(self):
-        """收集队友正在射击的 Goal ID"""
+    def _get_teammate_targets(self):
+        """收集队友正在攻击的目标（Goal ID + Player ID）
+
+        Returns:
+            (goal_ids, player_ids) — 两个 set
+        """
         from arena.game_manager import game_manager
-        ids = set()
+        goal_ids = set()
+        player_ids = set()
         for p in game_manager.players:
-            if (p != self.player and p.team == self.player.team
-                    and hasattr(p, 'controller') and hasattr(p.controller, 'current_target_goal_id')
-                    and p.controller.current_target_goal_id is not None):
-                ids.add(p.controller.current_target_goal_id)
-        return ids
+            if p == self.player or p.team != self.player.team:
+                continue
+            ctrl = getattr(p, 'controller', None)
+            if ctrl is None:
+                continue
+            gid = getattr(ctrl, 'current_target_goal_id', None)
+            if gid is not None:
+                goal_ids.add(gid)
+            pid = getattr(ctrl, 'current_target_player_id', None)
+            if pid is not None:
+                player_ids.add(pid)
+        return goal_ids, player_ids
 
     # ==================== 绕行导航 ====================
 
@@ -295,6 +342,7 @@ class AIController:
         self.nav_target_pos = None
         self.nav_stuck_count = 0
         self.current_target_goal_id = None
+        self.current_target_player_id = None
 
     def _compute_detour_waypoint(self, obstacle_pos, target_pos):
         """计算障碍物两侧的绕行路径点，选择离目标更近的一侧"""
@@ -333,11 +381,16 @@ class AIController:
     # ==================== 视线检测 ====================
 
     def _has_line_of_sight(self, target_pos):
-        """检测视线（带缓存，避免频繁 raycast）"""
+        """检测视线（带缓存，避免频繁 raycast）
+
+        优化：缓存key量化到2单位格子，TTL=1.5s，减少raycast次数
+        """
         now = time.time()
-        cache_key = (round(target_pos.x, 1), round(target_pos.z, 1))
+        # 量化到2单位格子，大幅提升缓存命中率
+        cache_key = (round(self.player.x) // 2, round(self.player.z) // 2,
+                     round(target_pos.x) // 2, round(target_pos.z) // 2)
         cached = self._los_cache.get(cache_key)
-        if cached and cached[0] > now - 0.2:
+        if cached and cached[0] > now - 1.5:
             return cached[1]
 
         from ursina import Vec3, raycast
@@ -357,22 +410,43 @@ class AIController:
 
         self._los_cache[cache_key] = (now, result)
         # 清理过期缓存
-        if len(self._los_cache) > 50:
-            self._los_cache = {k: v for k, v in self._los_cache.items() if v[0] > now - 0.5}
+        if len(self._los_cache) > 40:
+            self._los_cache = {k: v for k, v in self._los_cache.items() if v[0] > now - 3.0}
         return result
 
     # ==================== Goal 射击 ====================
 
-    def _shoot_goal(self, goal):
+    def _shoot_goal(self, goal, los_confirmed=False):
         """射击 Goal"""
         self.state = 'shoot_goal'
         self.current_target_goal_id = goal.goal_id  # 声明目标，供队友协调
+
+        goal_pos = (goal.position.x, 0, goal.position.z)
+        my_pos = (self.player.x, 0, self.player.z)
+        d = dist_3d(my_pos, goal_pos)
+
+        # 距离够近就停步，避免撞上 Goal 实体引发反复绕行
+        move_fwd = 0.3 if d > Config.AI_PATROL_ARRIVE_DISTANCE else 0.0
+
         result = {
             'look_at': (goal.position.x, goal.position.z),
-            'move_fwd': 0.3,
-            'request_raycast': True,
+            'move_fwd': move_fwd,
+            'request_raycast': False,
             'shoot_dir': None,
         }
+
+        # 射程检查：超出子弹射程不开火，节约弹药
+        goal_pos = (goal.position.x, goal.position.y, goal.position.z)
+        my_pos = (self.player.x, self.player.y, self.player.z)
+        d = dist_3d(my_pos, goal_pos)
+        if d > Config.BULLET_MAX_DISTANCE * 0.9:
+            return result
+
+        # LOS 检查（如未在 _evaluate_targets 中确认）
+        if not los_confirmed:
+            from ursina import Vec3
+            if not self._has_line_of_sight(goal.position + Vec3(0, 1.5, 0)):
+                return result
 
         # 射击节流
         effective_interval = self.shoot_interval * 1.5
@@ -424,6 +498,13 @@ class AIController:
                 self._strafe_change_time = time.time() + random.uniform(1.0, 2.5)
             result['rotate_y'] = self._strafe_dir * self.rotation_speed * 0.3 / 60
             result['move_fwd'] = 0.3
+
+        # 射程检查：超出子弹射程不开火，节约弹药
+        target_pos = (target.position.x, target.position.y, target.position.z)
+        my_pos = (self.player.x, self.player.y, self.player.z)
+        d = dist_3d(my_pos, target_pos)
+        if d > Config.BULLET_MAX_DISTANCE * 0.9:
+            return result
 
         # 射击节流
         effective_interval = self.shoot_interval
@@ -493,11 +574,9 @@ class AIController:
             self._generate_patrol_points()
 
         target = self.patrol_points[self.current_patrol_idx]
-        my_pos = (self.player.x, self.player.y, self.player.z)
-        if dist_3d(my_pos, (target.x, target.y, target.z)) < Config.AI_PATROL_ARRIVE_DISTANCE:
-            self.current_patrol_idx = (self.current_patrol_idx + 1) % len(self.patrol_points)
-            self.patrol_points = []
-            self._generate_patrol_points()
+        my_pos = (self.player.x, 0, self.player.z)
+        if dist_3d(my_pos, (target.x, 0, target.z)) < Config.AI_PATROL_ARRIVE_DISTANCE:
+            self.current_patrol_idx = (self.current_patrol_idx + self._patrol_direction) % len(self.patrol_points)
 
         return {
             'look_at': (target.x, target.z),
