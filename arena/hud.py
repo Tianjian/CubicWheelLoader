@@ -76,13 +76,15 @@ class HUD:
         # 地面准星
         self.ground_crosshair = Entity(
             model='circle', color=color.yellow,
-            scale=1, y=0.1
+            scale=1, y=0.1,
+            unlit=True,          # 不受光照影响，避免阴影闪烁
+            double_sided=True,   # 双面渲染，任何角度可见
         )
 
         # 操作提示（左下角）
         self.controls_text = Text(
-            text='Keyboard: WASD-Move  LMB-Shoot  V-View\n'
-                 'Gamepad:  LS-Move  RS-Rotate  LT-Shoot  X-View',
+            text='Keyboard: WASD-Move  LMB-Shoot  V-View  Yx3-Suicide\n'
+                 'Gamepad:  LS-Move  RS-Rotate  LT-Shoot  X-View  Yx3-Suicide',
             position=(-0.85, -0.35),
             scale=0.8,
             parent=camera.ui,
@@ -91,7 +93,7 @@ class HUD:
         )
 
     def update_player_info(self, player):
-        """更新人类玩家的 HUD 信息（带脏检查，避免每帧重建字符串）"""
+        """更新人类玩家的 HUD 文本信息（带脏检查，避免每帧重建字符串）"""
         if not player:
             return
 
@@ -127,14 +129,15 @@ class HUD:
                 self.ammo_text.text = new_ammo
                 self.ammo_text.color = color.yellow if ammo > 3 else color.red
 
-        # 地面准星
+    def update_crosshair(self, player):
+        """更新地面准星位置（每帧调用，保证流畅）"""
+        if not player or not self.ground_crosshair:
+            return
         if player.state.value == 'alive':
             new_pos = player.position + player.forward * 10
-            # 仅在位置变化超过阈值时更新
             cur = self.ground_crosshair.position
-            if abs(new_pos.x - cur.x) > 0.3 or abs(new_pos.z - cur.z) > 0.3:
-                self.ground_crosshair.position = new_pos
-                self.ground_crosshair.y = 0.1
+            self.ground_crosshair.position = lerp(cur, new_pos, time.dt * 15)
+            self.ground_crosshair.y = 0.15  # 稍抬高避免 Z-fighting
             if not self.ground_crosshair.enabled:
                 self.ground_crosshair.enabled = True
         else:

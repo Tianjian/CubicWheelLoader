@@ -12,6 +12,7 @@
   input_source: str     # 'gamepad' | 'keyboard'
 """
 from ursina import *
+import time
 from arena.xinput import get_state, is_available, vibrate
 from arena.constants import Config
 
@@ -45,6 +46,10 @@ def parse_gamepad_state(state):
 class InputManager(Entity):
     """输入管理器 — 统一键盘/鼠标/手柄输入"""
 
+    # 自杀检测参数
+    _SUICIDE_PRESS_COUNT = 3          # 需要连续按 Y 的次数
+    _SUICIDE_PRESS_WINDOW = 1.0       # 连续按键的时间窗口（秒）
+
     def __init__(self):
         super().__init__()
         self.gamepad_connected = is_available()
@@ -54,6 +59,11 @@ class InputManager(Entity):
         self.move_sideways = 0.0
         self.shoot = 0.0
         self.action = False
+        self.suicide = False   # 自杀信号（消费型）
+
+        # 自杀按键检测状态
+        self._y_press_times = []       # 最近按 Y 键的时间戳列表
+        self._gp_y_was_pressed = False # 手柄Y键上一帧状态（边沿检测）
 
         if self.gamepad_connected:
             print('[InputManager] Gamepad detected (XInput)')
@@ -63,6 +73,7 @@ class InputManager(Entity):
     def update(self):
         """每帧读取输入，自动合并键盘和手柄"""
         self.action = False
+        self.suicide = False
 
         kb = self._read_keyboard()
         gp_state = get_state(0)
@@ -77,6 +88,16 @@ class InputManager(Entity):
         self.move_forward = merge_inputs(kb[0], gp_fwd)
         self.move_sideways = merge_inputs(kb[1], gp_side)
         self.shoot = merge_inputs(kb[2], gp_shoot)
+
+        # 手柄Y键边沿检测（按下瞬间触发，不是按住持续触发）
+        if gp_state is not None:
+            gp_y_pressed = 'Y' in gp_state.get('buttons', set())
+            if gp_y_pressed and not self._gp_y_was_pressed:
+                self._on_y_press()
+            self._gp_y_was_pressed = gp_y_pressed
+
+        # 检测自杀信号（连续按Y）
+        self._check_suicide()
 
     def _read_keyboard(self):
         """读取键盘/鼠标输入"""
@@ -103,3 +124,22 @@ class InputManager(Entity):
         """处理 Ursina 键盘瞬时按键"""
         if key == 'v':
             self.action = True  # V 键 → 切换视角
+        elif key == 'y':
+            self._on_y_press()  # 键盘Y键 → 记录按压时间
+
+    def _on_y_press(self):
+        """记录一次 Y 按键时间（键盘或手柄），用于自杀检测"""
+        now = time.time()
+        self._y_press_times.append(now)
+        # 清理超过时间窗口的旧记录
+        cutoff = now - self._SUICIDE_PRESS_WINDOW
+        self._y_press_times = [t for t in self._y_press_times if t > cutoff]
+
+    def _check_suicide(self):
+        """检测是否在时间窗口内连续按了3次Y（键盘Y或手柄Y）"""
+        now = time.time()
+        cutoff = now - self._SUICIDE_PRESS_WINDOW
+        self._y_press_times = [t for t in self._y_press_times if t > cutoff]
+        if len(self._y_press_times) >= self._SUICIDE_PRESS_COUNT:
+            self.suicide = True
+            self._y_press_times.clear()  # 重置，防止重复触发

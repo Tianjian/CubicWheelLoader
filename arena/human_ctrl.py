@@ -42,6 +42,10 @@ class HumanController:
             shoot_dir = self.player.forward.normalized()
             self.player.weapon.shoot(shoot_dir)
 
+        # 自杀（连续3下Y键，键盘Y或手柄Y）
+        if im.suicide and self.player.state.value == 'alive':
+            self.player.suicide()
+
     def _get_move_ignore_list(self):
         """获取移动 raycast 应忽略的实体列表（自己 + Goal）"""
         from arena.game_manager import game_manager

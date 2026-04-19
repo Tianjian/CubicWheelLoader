@@ -122,6 +122,21 @@ class Player(Entity):
         if self.hp <= 0:
             self.die(attacker)
 
+    def suicide(self):
+        """自杀（连续3下X键触发），不计入击杀/死亡统计"""
+        if self.state != PlayerState.ALIVE:
+            return
+        self.state = PlayerState.DEAD
+        # 自杀不计入 deaths/kills，不触发 on_player_killed
+        from arena.sound_manager import sound_manager
+        sound_manager.play_death()
+        from arena.game_manager import game_manager
+        if self == game_manager.human_player and game_manager.camera_controller:
+            game_manager.camera_controller.set_spectator()
+            from arena.hud import hud
+            hud.ground_crosshair.enabled = False
+        invoke(self.respawn, delay=Config.RESPAWN_DELAY)
+
     def die(self, killer):
         """死亡处理"""
         self.state = PlayerState.DEAD

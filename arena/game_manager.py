@@ -289,10 +289,14 @@ class GameManager(Entity):
                     self._apply_ai_command(player, cmd)
                     player._pending_ai_cmd = None
 
-            # 更新 HUD（每3帧一次，减少UI开销）
-            self._hud_counter += 1
-            if self.human_player and self._hud_counter % 3 == 0:
-                hud.update_player_info(self.human_player)
+            # 更新 HUD
+            if self.human_player:
+                # 准星每帧更新（保证流畅）
+                hud.update_crosshair(self.human_player)
+                # 文本信息每3帧更新（减少开销）
+                self._hud_counter += 1
+                if self._hud_counter % 3 == 0:
+                    hud.update_player_info(self.human_player)
 
     # 同队AI最小间距（小于此值时推开，防止 collider 重叠导致物理抖动/卡住）
     _TEAMMATE_MIN_DIST = 2.0
