@@ -26,7 +26,7 @@ class GameManager(Entity):
         self.camera_controller = None
         self.game_map = None
         self.input_manager = None
-        self.ai_process_manager = None  # P3: AI 子进程管理器
+
 
     def start_match(self, selected_player_id, map_name=None):
         """开始比赛"""
@@ -69,12 +69,6 @@ class GameManager(Entity):
         # 创建相机控制器
         self.camera_controller = CameraController(self.human_player)
 
-        # 启动 AI 子进程（如果配置开启）
-        if Config.AI_USE_SUBPROCESS:
-            self._start_ai_subprocess()
-        else:
-            self.ai_process_manager = None
-
         # 创建 HUD
         hud.create()
 
@@ -85,22 +79,6 @@ class GameManager(Entity):
         # 开始倒计时
         self.state = GameState.COUNTDOWN
         self._countdown(3)
-
-    def _start_ai_subprocess(self):
-        """启动 AI 子进程"""
-        from arena.ai_process import AIProcessManager
-        self.ai_process_manager = AIProcessManager()
-
-        # 收集所有玩家信息（子进程需要知道所有玩家的位置来寻敌）
-        players_info = []
-        for player in self.players:
-            players_info.append({
-                'player_id': player.player_id,
-                'team_id': 0 if player.team == Team.RED else 1,
-                'spawn_x': player.spawn_position.x,
-                'spawn_z': player.spawn_position.z,
-            })
-        self.ai_process_manager.start(players_info)
 
     def _countdown(self, seconds):
         """倒计时"""
@@ -236,12 +214,7 @@ class GameManager(Entity):
             destroy(ui)
         self._result_ui = []
 
-        # 2. 停止 AI 子进程
-        if self.ai_process_manager:
-            self.ai_process_manager.stop()
-            self.ai_process_manager = None
-
-        # 3. 销毁输入管理器
+        # 2. 销毁输入管理器
         if self.input_manager:
             destroy(self.input_manager)
             self.input_manager = None
@@ -290,26 +263,14 @@ class GameManager(Entity):
                 if self.camera_controller:
                     self.camera_controller.toggle_distance()
 
-            # 应用 AI 决策
-            if self.ai_process_manager and self.ai_process_manager.is_running:
-                # 子进程模式：写入状态 → 读取决策 → 应用
-                self.ai_process_manager.write_player_states(self.players, time.dt)
-                commands = self.ai_process_manager.read_commands(Config.AI_SUBPROCESS_TIMEOUT)
-                for player in self.players:
-                    if player == self.human_player:
-                        continue
-                    cmd = commands.get(player.player_id)
-                    if cmd:
-                        self._apply_ai_command(player, cmd)
-            else:
-                # 主线程模式：从 Player._pending_ai_cmd 读取
-                for player in self.players:
-                    if player == self.human_player:
-                        continue
-                    cmd = getattr(player, '_pending_ai_cmd', None)
-                    if cmd:
-                        self._apply_ai_command(player, cmd)
-                        player._pending_ai_cmd = None
+            # 应用 AI 决策（主线程模式）
+            for player in self.players:
+                if player == self.human_player:
+                    continue
+                cmd = getattr(player, '_pending_ai_cmd', None)
+                if cmd:
+                    self._apply_ai_command(player, cmd)
+                    player._pending_ai_cmd = None
 
             # 更新 HUD
             if self.human_player:

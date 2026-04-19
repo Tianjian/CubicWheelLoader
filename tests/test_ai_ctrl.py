@@ -352,8 +352,7 @@ class TestAIControllerDecision:
             Vec3(0, 0, -15),
         ]
         # Mock 掉需要 game_manager 的方法
-        ai_ctrl._find_nearest_visible_enemy = lambda: None
-        ai_ctrl._find_shootable_goal = lambda: None
+        ai_ctrl._evaluate_targets = lambda: []
 
         result = ai_ctrl.update()
         assert isinstance(result, dict)
@@ -394,8 +393,150 @@ class TestAIControllerDecision:
         """非射击 Goal 状态时清除 current_target_goal_id"""
         ai_ctrl.current_target_goal_id = 3
         ai_ctrl.patrol_points = [Vec3(-10, 0, -20), Vec3(10, 0, -20)]
-        ai_ctrl._find_nearest_visible_enemy = lambda: None
-        ai_ctrl._find_shootable_goal = lambda: None
+        ai_ctrl._evaluate_targets = lambda: []
 
         ai_ctrl.update()
         assert ai_ctrl.current_target_goal_id is None
+
+
+class TestIsInOurHalf:
+    """_is_in_our_half 半场判断测试"""
+
+    @pytest.fixture
+    def ai_ctrl(self, ursina_app):
+        from arena.player import Player
+        from arena.ai_ctrl import AIController
+        from arena.constants import Team
+        player = Player(player_id=2, team=Team.RED,
+                        spawn_position=Vec3(0, 0, -24))
+        ctrl = AIController(player)
+        yield ctrl
+        from ursina import destroy
+        destroy(player)
+
+    def test_red_team_negative_z_is_our_half(self, ai_ctrl):
+        """RED 队：z < 0 是本方半场"""
+        assert ai_ctrl._is_in_our_half(Vec3(0, 0, -5)) is True
+        assert ai_ctrl._is_in_our_half(Vec3(0, 0, 5)) is False
+        assert ai_ctrl._is_in_our_half(Vec3(0, 0, 0)) is False
+
+    def test_blue_team_positive_z_is_our_half(self, ai_ctrl):
+        """BLUE 队：z > 0 是本方半场"""
+        from arena.constants import Team
+        ai_ctrl.player.team = Team.BLUE
+        assert ai_ctrl._is_in_our_half(Vec3(0, 0, 5)) is True
+        assert ai_ctrl._is_in_our_half(Vec3(0, 0, -5)) is False
+        assert ai_ctrl._is_in_our_half(Vec3(0, 0, 0)) is False
+
+
+class TestEvaluateTargets:
+    """_evaluate_targets 统一目标评分测试"""
+
+    @pytest.fixture
+    def ai_ctrl(self, ursina_app):
+        from arena.player import Player
+        from arena.ai_ctrl import AIController
+        from arena.constants import Team
+        player = Player(player_id=2, team=Team.RED,
+                        spawn_position=Vec3(0, 0, -5))
+        ctrl = AIController(player)
+        yield ctrl
+        from ursina import destroy
+        destroy(player)
+
+    def test_empty_when_no_targets(self, ai_ctrl):
+        """无目标时返回空列表"""
+        ai_ctrl._get_teammate_target_ids = lambda: set()
+        # Mock game_manager 返回空目标
+        import arena.game_manager as gm_mod
+        original_gm = gm_mod.game_manager
+
+        class MockMap:
+            goals = []
+
+        class MockGM:
+            game_map = MockMap()
+            players = []
+
+        gm_mod.game_manager = MockGM()
+        try:
+            result = ai_ctrl._evaluate_targets()
+            assert result == []
+        finally:
+            gm_mod.game_manager = original_gm
+
+    def test_goal_scores_higher_than_distant_player(self, ai_ctrl):
+        """近处 Goal 评分高于远处普通敌人"""
+        from arena.constants import Team, PlayerState
+        import arena.game_manager as gm_mod
+        original_gm = gm_mod.game_manager
+
+        class MockGoal:
+            goal_id = 1
+            position = Vec3(3, 0, -5)
+            owner = Team.BLUE
+
+        class MockMap:
+            goals = [MockGoal()]
+
+        class MockWeapon:
+            current_ammo = 3
+
+        class MockPlayer:
+            team = Team.BLUE
+            state = PlayerState.ALIVE
+            position = Vec3(10, 0, 10)
+            weapon = MockWeapon()
+
+        class MockGM:
+            game_map = MockMap()
+            players = [MockPlayer()]
+
+        ai_ctrl._get_teammate_target_ids = lambda: set()
+        ai_ctrl._has_line_of_sight = lambda pos: True
+        gm_mod.game_manager = MockGM()
+        try:
+            result = ai_ctrl._evaluate_targets()
+            assert len(result) >= 2
+            # Goal should score higher
+            assert result[0][1] == 'goal'
+        finally:
+            gm_mod.game_manager = original_gm
+
+    def test_defender_urgency_on_high_ammo_enemy_in_our_half(self, ai_ctrl):
+        """本方半场高弹药敌人获得防守加成，评分超过 Goal"""
+        from arena.constants import Team, PlayerState, Config
+        import arena.game_manager as gm_mod
+        original_gm = gm_mod.game_manager
+
+        class MockGoal:
+            goal_id = 1
+            position = Vec3(6, 0, -6)
+            owner = Team.BLUE
+
+        class MockMap:
+            goals = [MockGoal()]
+
+        class MockWeapon:
+            current_ammo = Config.AI_HIGH_AMMO_THRESHOLD  # 高弹药
+
+        class MockEnemy:
+            team = Team.BLUE
+            state = PlayerState.ALIVE
+            position = Vec3(1, 0, -3)  # RED 本方半场 (z<0)
+            weapon = MockWeapon()
+
+        class MockGM:
+            game_map = MockMap()
+            players = [MockEnemy()]
+
+        ai_ctrl._get_teammate_target_ids = lambda: set()
+        ai_ctrl._has_line_of_sight = lambda pos: True
+        gm_mod.game_manager = MockGM()
+        try:
+            result = ai_ctrl._evaluate_targets()
+            assert len(result) >= 2
+            # 防守加成的敌人应排第一
+            assert result[0][1] == 'player'
+        finally:
+            gm_mod.game_manager = original_gm

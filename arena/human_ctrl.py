@@ -15,6 +15,11 @@ class HumanController:
         if self.player.state.value not in ('alive', 'respawning'):
             return
 
+        # 倒计时期间禁止操作
+        from arena.game_manager import game_manager
+        if game_manager.state.value != 'playing':
+            return
+
         im = self.im
 
         # 旋转（右摇杆 X / 键盘 A/D，杆量 = 速度比例）

@@ -19,29 +19,33 @@
     },
     "human": {
         "move_speed": 7,
-        "rotation_speed": 100,
+        "rotation_speed": 140,
         "input_deadzone": 0.05
     },
     "ai": {
         "move_speed": 7,
-        "rotation_speed": 100,
+        "rotation_speed": 140,
         "detection_range": 60,
         "attack_range": 25,
         "shoot_spread": 0.05,
         "shoot_interval": 0.4,
         "patrol_arrive_distance": 2,
         "avoid_duration": 1.0,
-        "use_subprocess": false,
-        "subprocess_timeout": 0.005,
         "low_ammo_threshold": 3,
         "strafe_enabled": true,
         "los_check_enabled": true,
         "goal_shoot_spread_multiplier": 0.5,
-        "avoid_navigate_timeout": 3.0
+        "avoid_navigate_timeout": 3.0,
+        "proximity_boost_k": 5.0,
+        "goal_priority_weight": 3.3,
+        "high_ammo_threshold": 7,
+        "defender_urgency_multiplier": 4.0,
+        "shootable_goal_multiplier": 1.5,
+        "teammate_target_penalty": 0.3
     },
     "match": {
         "duration": 120,
-        "kill_score": 3,
+        "kill_score": 2,
         "goal_score": 10,
         "goal_hit_window": 7,
         "timer_warning_seconds": 30

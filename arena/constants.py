@@ -78,9 +78,13 @@ class Config:
     AI_GOAL_SHOOT_SPREAD_MULT = _settings['ai']['goal_shoot_spread_multiplier']
     AI_AVOID_NAVIGATE_TIMEOUT = _settings['ai']['avoid_navigate_timeout']
 
-    # AI 子进程
-    AI_USE_SUBPROCESS = _settings['ai']['use_subprocess']
-    AI_SUBPROCESS_TIMEOUT = _settings['ai']['subprocess_timeout']
+    # AI 策略评分
+    AI_PROXIMITY_BOOST_K = _settings['ai']['proximity_boost_k']
+    AI_GOAL_PRIORITY_WEIGHT = _settings['ai']['goal_priority_weight']
+    AI_HIGH_AMMO_THRESHOLD = _settings['ai']['high_ammo_threshold']
+    AI_DEFENDER_URGENCY_MULT = _settings['ai']['defender_urgency_multiplier']
+    AI_SHOOTABLE_GOAL_MULT = _settings['ai']['shootable_goal_multiplier']
+    AI_TEAMMATE_TARGET_PENALTY = _settings['ai']['teammate_target_penalty']
 
     # 比赛规则
     MATCH_DURATION = _settings['match']['duration']

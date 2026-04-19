@@ -1,6 +1,6 @@
-"""AI 玩家控制器（6 状态机：reload / shoot_goal / attack / chase / patrol / navigate）
+"""AI 玩家控制器（评分驱动状态机：reload / shoot_goal / attack / chase / patrol / navigate）
 
-Phase 5 重构：弹药感知、Goal优先、视线检测、侧步走位、Goal优先巡逻、Waypoint绕行。
+升级：统一目标评分系统，距离优先权重 + 防守紧迫加成。
 返回决策字典，由 GameManager 通过 _apply_ai_command() 统一应用。
 """
 import time
@@ -80,34 +80,139 @@ class AIController:
         return self._state_machine()
 
     def _state_machine(self):
-        """AI 行为状态机"""
-        my_pos = (self.player.x, self.player.y, self.player.z)
-
-        # 非射击 Goal 状态时清除目标声明
+        """AI 行为状态机（评分驱动）"""
         self.current_target_goal_id = None
 
-        # 1. 弹药耗尽 → 强制回基地
+        # 1. 弹药耗尽 → 强制回基地（不可覆盖）
         if self.player.weapon.current_ammo <= 0:
             return self._reload()
 
-        # 2. 射击 Goal（优先级高于射击敌人）
-        if Config.AI_LOS_CHECK_ENABLED:
-            goal_target = self._find_shootable_goal()
-            if goal_target:
-                return self._shoot_goal(goal_target)
+        # 2. 统一目标评分
+        candidates = self._evaluate_targets()
 
-        # 3. 射击敌人
-        enemy = self._find_nearest_visible_enemy()
-        if enemy:
+        if not candidates:
+            return self._patrol()
+
+        _, best_type, best_target = candidates[0]
+
+        # 3. 根据最高分目标决定行为
+        if best_type == 'goal':
+            goal = best_target
+            goal_pos = (goal.position.x, 0, goal.position.z)
+            my_pos = (self.player.x, 0, self.player.z)
+            d = dist_3d(my_pos, goal_pos)
+
+            from ursina import Vec3
+            # 在射程内+有LOS → 射击Goal
+            if d <= Config.BULLET_MAX_DISTANCE * 0.9 and \
+               self._has_line_of_sight(goal.position + Vec3(0, 1.5, 0)):
+                return self._shoot_goal(goal)
+            else:
+                # 不在射程 → 巡逻前往该Goal
+                return self._patrol_toward(goal.position)
+
+        else:  # best_type == 'player'
+            enemy = best_target
+            my_pos = (self.player.x, self.player.y, self.player.z)
             enemy_pos = (enemy.position.x, enemy.position.y, enemy.position.z)
             d = dist_3d(my_pos, enemy_pos)
+
             if d < self.attack_range:
                 return self._attack(enemy)
-            elif d < self.detection_range:
+            else:
                 return self._chase(enemy)
 
-        # 4. 巡逻（优先前往未占领 Goal）
-        return self._patrol()
+    # ==================== 统一目标评分 ====================
+
+    def _evaluate_targets(self):
+        """统一目标评分，返回 [(score, target_type, target), ...] 按评分降序
+
+        target_type: 'goal' | 'player'
+        target: Goal Entity | Player Entity
+        """
+        from arena.game_manager import game_manager
+        from ursina import Vec3
+
+        my_pos = (self.player.x, 0, self.player.z)
+        candidates = []
+
+        # ---- Goal 候选 ----
+        goals = getattr(game_manager.game_map, 'goals', [])
+        teammate_target_ids = self._get_teammate_target_ids()
+
+        for goal in goals:
+            if goal.owner == self.player.team:
+                continue  # 己方已占领，排除
+
+            goal_pos = (goal.position.x, 0, goal.position.z)
+            d = dist_3d(my_pos, goal_pos)
+
+            score = Config.GOAL_SCORE * Config.AI_GOAL_PRIORITY_WEIGHT / (d + 1)
+            score *= (1 + Config.AI_PROXIMITY_BOOST_K / (d + 1))
+
+            # 射程内+有LOS 加成
+            if d <= Config.BULLET_MAX_DISTANCE * 0.9:
+                if self._has_line_of_sight(goal.position + Vec3(0, 1.5, 0)):
+                    score *= Config.AI_SHOOTABLE_GOAL_MULT
+
+            # 队友已锁定降权
+            if goal.goal_id in teammate_target_ids:
+                score *= Config.AI_TEAMMATE_TARGET_PENALTY
+
+            candidates.append((score, 'goal', goal))
+
+        # ---- Player 候选 ----
+        for p in game_manager.players:
+            if p.team == self.player.team:
+                continue
+            if p.state.value != 'alive':
+                continue
+
+            p_pos = (p.position.x, 0, p.position.z)
+            d = dist_3d(my_pos, p_pos)
+
+            if d > self.detection_range:
+                continue  # 超出侦测范围，排除
+
+            # attack_range 内的敌人检查LOS
+            if d < self.attack_range and Config.AI_LOS_CHECK_ENABLED:
+                if not self._has_line_of_sight(p.position + Vec3(0, 1, 0)):
+                    continue
+
+            score = Config.KILL_SCORE / (d + 1)
+            score *= (1 + Config.AI_PROXIMITY_BOOST_K / (d + 1))
+
+            # 防守加成：本方半场 + 敌方高弹药
+            if self._is_in_our_half(p.position) and \
+               p.weapon.current_ammo >= Config.AI_HIGH_AMMO_THRESHOLD:
+                score *= Config.AI_DEFENDER_URGENCY_MULT
+
+            candidates.append((score, 'player', p))
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates
+
+    def _is_in_our_half(self, position):
+        """判断 position 是否在本方半场
+
+        RED 半场: z < 0
+        BLUE 半场: z > 0
+        """
+        if self.player.team == Team.RED:
+            return position.z < 0
+        else:
+            return position.z > 0
+
+    def _get_teammate_target_ids(self):
+        """收集队友正在射击的 Goal ID"""
+        from arena.game_manager import game_manager
+        ids = set()
+        for p in game_manager.players:
+            if (p != self.player and p.team == self.player.team
+                    and hasattr(p, 'controller') and hasattr(p.controller, 'current_target_goal_id')
+                    and p.controller.current_target_goal_id is not None):
+                ids.add(p.controller.current_target_goal_id)
+        return ids
 
     # ==================== 绕行导航 ====================
 
@@ -258,64 +363,6 @@ class AIController:
 
     # ==================== Goal 射击 ====================
 
-    def _find_shootable_goal(self):
-        """找到最近的可见且值得射击的 Goal（排除队友正在射击的 Goal）"""
-        from arena.game_manager import game_manager
-        from ursina import Vec3
-        goals = getattr(game_manager.game_map, 'goals', [])
-        my_pos = (self.player.x, self.player.y, self.player.z)
-
-        # 收集队友正在射击的 Goal ID
-        teammate_target_ids = set()
-        for p in game_manager.players:
-            if (p != self.player and p.team == self.player.team
-                    and hasattr(p, 'controller') and hasattr(p.controller, 'current_target_goal_id')
-                    and p.controller.current_target_goal_id is not None):
-                teammate_target_ids.add(p.controller.current_target_goal_id)
-
-        best = None
-        best_dist = float('inf')
-
-        for goal in goals:
-            if goal.owner == self.player.team:
-                continue
-
-            # 队友已在射击此 Goal → 跳过，节省弹药
-            if goal.goal_id in teammate_target_ids:
-                continue
-
-            goal_pos = goal.position
-            d = dist_3d(my_pos, (goal_pos.x, goal_pos.y, goal_pos.z))
-
-            # 射程检测：必须在子弹射程内才射击，否则浪费弹药
-            if d > Config.BULLET_MAX_DISTANCE * 0.9:
-                continue
-
-            # 视线检测
-            if not self._has_line_of_sight(goal_pos + Vec3(0, 1.5, 0)):
-                continue
-
-            if d < best_dist:
-                best_dist = d
-                best = goal
-
-        # 如果所有可射击 Goal 都被队友占了，放弃排他（总比不射击好）
-        if best is None and goals:
-            for goal in goals:
-                if goal.owner == self.player.team:
-                    continue
-                goal_pos = goal.position
-                d = dist_3d(my_pos, (goal_pos.x, goal_pos.y, goal_pos.z))
-                if d > Config.BULLET_MAX_DISTANCE * 0.9:
-                    continue
-                if not self._has_line_of_sight(goal_pos + Vec3(0, 1.5, 0)):
-                    continue
-                if d < best_dist:
-                    best_dist = d
-                    best = goal
-
-        return best
-
     def _shoot_goal(self, goal):
         """射击 Goal"""
         self.state = 'shoot_goal'
@@ -346,28 +393,17 @@ class AIController:
 
         return result
 
-    # ==================== 可见敌人检测 ====================
+    # ==================== 前往目标位置 ====================
 
-    def _find_nearest_visible_enemy(self):
-        """找到最近的可见敌方玩家"""
-        from arena.game_manager import game_manager
-        from ursina import Vec3
-        nearest = None
-        min_dist = float('inf')
-        my_pos = (self.player.x, self.player.y, self.player.z)
-        for p in game_manager.players:
-            if p.team != self.player.team and p.state.value == 'alive':
-                p_pos = (p.position.x, p.position.y, p.position.z)
-                d = dist_3d(my_pos, p_pos)
-                if d > self.detection_range:
-                    continue
-                if d < self.attack_range and Config.AI_LOS_CHECK_ENABLED:
-                    if not self._has_line_of_sight(p.position + Vec3(0, 1, 0)):
-                        continue
-                if d < min_dist:
-                    min_dist = d
-                    nearest = p
-        return nearest
+    def _patrol_toward(self, target_position):
+        """前往指定目标位置（通常是不在射程内的Goal）"""
+        self.state = 'patrol'
+        return {
+            'look_at': (target_position.x, target_position.z),
+            'move_fwd': 1.0,
+            'request_raycast': True,
+            'shoot_dir': None,
+        }
 
     # ==================== 攻击状态（带侧步走位） ====================
 
