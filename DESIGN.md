@@ -1,6 +1,6 @@
 # CubicWheelLoader 设计文档
 
-本文件合并了项目所有设计文档，涵盖游戏系统设计、升级计划、引擎参考等内容。
+本文件合并了项目所有设计文档，涵盖游戏系统设计、手柄操控设计、引擎参考等内容。
 
 ---
 
@@ -8,13 +8,12 @@
 
 1. [游戏系统设计](#1-游戏系统设计)
 2. [手柄操控设计](#2-手柄操控设计)
-3. [升级计划（P0-P3）](#3-升级计划p0-p3)
-4. [FPS Demo 设计参考](#4-fps-demo-设计参考)
-5. [Ursina 引擎架构与参考](#5-ursina-引擎架构与参考)
-6. [新游戏规则设计](#6-新游戏规则设计)
-7. [AI 避障绕行设计](#7-ai-避障绕行设计)
-8. [声音系统升级设计](#8-声音系统升级设计)
-9. [蓝方相机视角对称修复](#9-蓝方相机视角对称修复)
+3. [FPS Demo 设计参考](#3-fps-demo-设计参考)
+4. [Ursina 引擎架构与参考](#4-ursina-引擎架构与参考)
+5. [AI 避障绕行设计](#5-ai-避障绕行设计)
+6. [声音系统升级设计](#6-声音系统升级设计)
+7. [蓝方相机视角对称修复](#7-蓝方相机视角对称修复)
+8. [性能优化与防卡顿](#8-性能优化与防卡顿)
 
 ---
 
@@ -24,7 +23,7 @@
 
 - **4 名 Player**，分为红队 x2 和蓝队 x2
 - 人类玩家可选择操控任意一个 Player，其余 3 个由 AI 控制
-- 占领地图上的 4 个 Goal 圆柱得分（每个 10 分），击杀敌方 +3 分
+- 占领地图上的 4 个 Goal 圆柱得分（每个 10 分），击杀敌方 +2 分
 - 比赛时长 120 秒，时间结束后总分高的队伍获胜
 
 ## 1.2 游戏状态机
@@ -57,7 +56,7 @@ class Player(Entity):
     destroyed       # 销毁标志位，防止延迟回调操作已销毁实体
     invincible      # 重生无敌
     weapon          # Weapon 实例（parent=self）
-    health_bar      # 头顶血条（parent=self）
+    health_bar      # 头顶血条（parent=self, unlit=True, double_sided=True, cull=False）
     name_tag        # 头顶名字（parent=self）
     ammo_text       # 头顶弹药显示（parent=self）
 ```
@@ -67,12 +66,27 @@ class Player(Entity):
 | 参数 | 值 |
 |------|-----|
 | 最大 HP | 100 |
-| 子弹伤害 | 30 |
+| 子弹伤害 | 15（speed_multiplier=1.5 实际飞行速度 27） |
 | 弹药上限 | 10 发，仅本方基地装填 |
 | 重生时间 | 3 秒 |
 | 重生 HP | 100 |
-| 重生无敌 | 2 秒 |
-| 射击冷却 | 0.15 秒 |
+| 重生无敌 | 2 秒（闪烁效果，每 0.1s 切换 visible） |
+| 射击冷却 | 0.5 秒 |
+
+### 自杀系统
+
+键盘 Y 或手柄 Y 键在 **1 秒内连续按 3 次** 触发自杀：
+
+- 自杀**不计入** deaths/kills 统计
+- 自杀**不触发** `on_player_killed` 事件
+- 人类玩家自杀后切换旁观相机、隐藏准星
+- 延迟 `RESPAWN_DELAY` 后在基地重生
+
+检测机制：
+- `InputManager` 维护 `_y_press_times` 时间戳列表
+- 手柄 Y 键使用边沿检测（`_gp_y_was_pressed`），按下瞬间触发而非持续触发
+- 键盘 Y 和手柄 Y 统一入口 `_on_y_press()`
+- `suicide` 信号为消费型（每帧重置），由 `HumanController.update()` 消费
 
 ### AI 行为状态机
 
@@ -86,9 +100,9 @@ class Player(Entity):
 | 状态 | 触发条件 | 行为 |
 |------|----------|------|
 | RELOAD | 弹药耗尽 | 回基地装填 |
-| SHOOT_GOAL | 可见未占领/敌方 Goal 在射程内 | 射击 Goal（散布减半） |
+| SHOOT_GOAL | 可见未占领/敌方 Goal 在射程内 | 射击 Goal（散布减半，最小站立距离 6.0） |
 | ATTACK | 敌人进入攻击范围（25 单位） | 射击 + 侧步走位 |
-| CHASE | 敌人进入检测范围（40 单位） | 朝敌人移动 |
+| CHASE | 敌人进入检测范围（60 单位） | 朝敌人移动 |
 | PATROL | 无目标 | 前往未占领 Goal 巡逻 |
 | NAVIGATE | 碰撞障碍物 | 绕行至 waypoint |
 
@@ -153,7 +167,7 @@ JSON 格式包含 ground、red_base、blue_base、goals、covers、boundaries �
 
 ## 1.5 计分与计时
 
-- 击杀敌方 +3 分（给击杀者所在队伍，当 kill_score > 0 时生效）
+- 击杀敌方 +2 分（给击杀者所在队伍，当 kill_score > 0 时生效）
 - 占领 Goal 每个得 10 分（比赛结束结算 + 实时显示）
 - 比赛时长 120 秒（2 分钟）
 - 最后 30 秒计时器变红闪烁
@@ -181,6 +195,8 @@ def get_score(team):
 | 相机距离 | 近 40 / 远 100 单位（V 键切换） |
 | 相机高度 | 近 15 / 远 37.5 单位 |
 | 队伍对称 | 红方 z_sign=+1，蓝方 z_sign=-1 |
+| 旁观 FOV | 45 |
+| 跟随启用延迟 | 0.3 秒（重生后延迟启用 lerp 跟随，避免位置不稳定） |
 
 ### 队伍对称相机
 
@@ -192,13 +208,31 @@ self.z_sign = 1 if self.target.team == Team.RED else -1
 # look_at 后修正 roll: camera.rotation_z = 0
 ```
 
+### 旁观模式
+
+玩家死亡时调用 `CameraController.set_spectator()`：
+- 相机切为 `scene` 子级，俯视 `(0, 40, 0)` + `rotation=(90, 0, 0)`
+- FOV 动画过渡到 `CAMERA_FOV_SPECTATOR=45`
+- 设 `_pending_enable=False` 取消待执行的跟随启用
+
+重生时调用 `CameraController.set_third_person()`：
+- 一次性设置位置和旋转，修正 `rotation_z=0`
+- 通过 `invoke(_enable_follow, delay=0.3)` 延迟启用 lerp 跟随
+- `_pending_enable` 标志防止死亡/重生 invoke 竞态
+
 ### 射击方向：跟随本体
 
 射击方向 = `player.forward`（玩家朝向），而非相机方向。相机仅作为观察者，不控制射击。
 
 ### 地面准星
 
-在玩家前方投射地面准星（黄色圆圈），指示当前朝向。
+在玩家前方投射地面准星（黄色圆圈），指示当前朝向：
+
+- 每帧使用 `lerp(cur, new_pos, time.dt * 15)` 平滑插值更新
+- `unlit=True`：不受光照影响，避免阴影闪烁
+- `double_sided=True`：双面渲染，任何角度可见
+- `y=0.15`：稍高于地面避免 Z-fighting
+- 非存活状态自动隐藏
 
 ## 1.7 HUD 布局
 
@@ -210,16 +244,32 @@ self.z_sign = 1 if self.target.team == Team.RED else -1
 │                                             │
 │  [HP ████████░░]  [K:0 D:0]  [P1 RED]      │  底部：血条、战绩、身份
 │          ○ 地面准星                          │  中心
+│                                             │
+│  Keyboard: WASD-Move  LMB-Shoot  V-View    │  左下角：操作提示
+│  Gamepad:  LS-Move  RS-Rotate  LT-Shoot    │  （双行，含自杀提示）
+│            X-View  Yx3-Suicide             │
 └─────────────────────────────────────────────┘
 ```
 
+### HUD 更新策略
+
+| 元素 | 更新频率 | 策略 |
+|------|---------|------|
+| 地面准星 | 每帧 | `update_crosshair()` — lerp 平滑插值 |
+| 血条/战绩/弹药 | 每 3 帧 | `update_player_info()` — 脏检查避免无变化时重建 |
+
+血条更新阈值：`abs diff > 0.005` 才更新 scale_x；stats/ammo 用字符串比较避免重复赋值。
+
 ## 1.8 子弹系统
 
-- 实体子弹，每帧飞行并做前方 raycast 碰撞检测
+- 实体子弹，每帧飞行，**每 2 帧做一次 raycast**（中间帧只位移，raycast 距离 × 2 补偿）
+- 全局 `_global_frame` 计数器，所有子弹共享，`_global_frame % 2 == 0` 时执行碰撞检测
 - 友军伤害过滤（`bullet.owner.team` 检查）
+- 无敌穿透（`target.invincible == True` 时子弹穿过不销毁）
 - 子弹命中 Goal 检测（`hasattr(target, 'on_bullet_hit')`）
 - 全局 `_all_bullets` 列表追踪，比赛结束时 `clear_all_bullets()` 批量清理
-- 子弹属性：damage=30, speed=35, max_distance=5, scale=0.3
+- 命中粒子特效：3 个橙色 cube 粒子沿 `normal + random spread` 飞出，0.3s 后销毁
+- 子弹属性：damage=15, speed=18, max_distance=5, scale=0.3, speed_multiplier=1.5
 
 ## 1.9 弹药系统
 
@@ -236,6 +286,46 @@ self.z_sign = 1 if self.target.team == Team.RED else -1
 - 占领方变化时通知比分系统实时更新
 - 视觉反馈：占领色 + 命中闪白
 
+## 1.11 同队防卡机制
+
+### 物理层分离
+
+`GameManager._separate_teammates(player)` — AI 移动后立即调用：
+
+- XZ 平面检测同队队友距离 < `_TEAMMATE_MIN_DIST=2.0` 时沿分离方向推开
+- 推力 = `(min_dist - d) * 0.5`（只推自己，不推对方）
+- 防止 `collider='box'` 的 Player 实体重叠导致 Ursina 物理引擎推挤抖动
+
+### AI 移动排除队友
+
+AI 移动 raycast 的 `ignore` 列表额外包含同队队友（人类玩家仅排除自己 + Goal），避免同队 AI 互相阻挡卡住。
+
+## 1.12 比赛间状态残留修复
+
+### 延迟回调防护
+
+所有延迟回调（`invoke`）执行前检查 `destroyed` 标志：
+
+| 回调 | 延迟 | 防护方式 |
+|------|------|---------|
+| `player.respawn()` | 3s | 检查 `destroyed` |
+| `player._end_invincibility()` | 2s | 检查 `destroyed` |
+| `weapon._hide_muzzle_flash()` | 0.05s | 检查 `destroyed` |
+| `weapon._end_cooldown()` | 0.15s | 检查 `destroyed` |
+| `KillFeed._remove_message()` | 5s | try/except 包裹 destroy() |
+
+### _restart() 清理流程
+
+1. 清理 end_match UI
+2. 销毁 InputManager
+3. 销毁 CameraController
+4. 销毁 GameMap（包含基地、掩体、边界墙、Goal）
+5. 标记+销毁 Player（防止延迟回调）
+6. 清理飞行中的 Bullet（`clear_all_bullets()`）
+7. 销毁 HUD
+8. 清理击杀播报
+9. 重置状态，重新显示角色选择
+
 ---
 
 # 2. 手柄操控设计
@@ -244,10 +334,10 @@ self.z_sign = 1 if self.target.team == Team.RED else -1
 
 ```
 键盘 held_keys ──┐
-                  ├──→ InputManager.update() ──→ move_forward / move_sideways / shoot
+                  ├──→ InputManager.update() ──→ move_forward / move_sideways / shoot / suicide
 XInput 状态  ────┘         (归一化、死区处理、杆量映射)
 
-input(key) ────────→ InputManager.input() ──→ action (切换视角)
+input(key) ────────→ InputManager.input() ──→ action (切换视角) / _on_y_press (自杀检测)
 ```
 
 ### InputManager 输出接口
@@ -258,6 +348,7 @@ input(key) ────────→ InputManager.input() ──→ action (�
 | move_sideways | float | -1..1 | 正=右转，杆量=速度比例 |
 | shoot | float | 0..1 | >0 射击，扳机压力=射速比例 |
 | action | bool | | 瞬时动作（消费型，读取后重置） |
+| suicide | bool | | 自杀信号（消费型，读取后重置） |
 
 ### 手柄按键映射
 
@@ -269,6 +360,7 @@ input(key) ────────→ InputManager.input() ──→ action (�
 | 右转 | D | 右摇杆 → (thumbRX > 0) |
 | 射击 | 鼠标左键 | 左扳机 LT (bLeftTrigger > 阈值) |
 | 切换视角 | V | X 键 |
+| 自杀 | Y×3 (1秒内) | Y 键×3 (1秒内，边沿检测) |
 
 ## 2.2 XInput 封装
 
@@ -291,172 +383,7 @@ input(key) ────────→ InputManager.input() ──→ action (�
 | input_manager.py | `merge_inputs(kb_val, gp_val)` | 键盘/手柄输入合并（取绝对值较大） |
 | input_manager.py | `parse_gamepad_state(state)` | 手柄状态 → (fwd, side, shoot) |
 
----
-
-# 3. 升级计划（P0-P3）
-
-## P0: 比赛间状态残留修复 ✅ 已完成
-
-### 问题
-
-第二局开始时，第一局的游戏实体和 UI 残留在场景中。
-
-### 泄漏清单
-
-| # | 泄漏项 | 原因 |
-|---|--------|------|
-| 1 | GameMap 全部实体 | _restart() 未销毁 game_map |
-| 2 | Base 子实体 | 子实体无 parent=self，destroy 不递归 |
-| 3 | 4 个边界墙 | 匿名 Entity 无引用 |
-| 4 | HUD 7 个元素 | _restart() 未调用 HUD 清理 |
-| 5 | end_match() 4 个 UI 元素 | 3 个 Text + 1 个 Button 无引用 |
-| 6 | CameraController Entity | 仅设 None 未 destroy() |
-| 7 | 飞行中的 Bullet | 比赛结束时未清理 |
-
-### 延迟回调隐患
-
-| # | 回调 | 延迟 | 修复 |
-|---|------|------|------|
-| 1 | player.respawn() | 3s | 检查 destroyed 标志 |
-| 2 | player._end_invincibility() | 2s | 检查 destroyed 标志 |
-| 3 | weapon._hide_muzzle_flash() | 0.05s | 检查 destroyed 标志 |
-| 4 | weapon._end_cooldown() | 0.15s | 检查 destroyed 标志 |
-| 5 | KillFeed._remove_message() | 5s | try/except 包裹 destroy() |
-
-### 修复方案
-
-1. **Base**: 子实体加 `parent=self`，position 改局部坐标，构造函数参数化
-2. **GameMap**: 添加 `destroy()` 方法，boundary_walls 保存引用
-3. **HUD**: 添加 `destroy()` 方法
-4. **Player**: 添加 `destroyed` 标志，respawn/_end_invincibility 检查
-5. **Weapon**: 添加 `destroyed` 标志，_hide_muzzle_flash/_end_cooldown 检查
-6. **Bullet**: `_all_bullets` 全局列表 + `clear_all_bullets()`
-7. **GameManager**: `_restart()` 11 步完整清理，`end_match()` UI 保存到 `_result_ui`
-
----
-
-## P1: 独立地图文件 ✅ 已完成
-
-### 改动
-
-| 文件 | 类型 | 说明 |
-|------|------|------|
-| arena/map_loader.py | 新增 | 地图加载/默认值/列表 |
-| maps/arena_classic.json | 新增 | 默认地图数据 |
-| arena/game_map.py | 修改 | 从 map_data 构建 + destroy() |
-| arena/base.py | 修改 | 参数化 + parent=self |
-| arena/game_manager.py | 修改 | start_match 传入 map_data |
-| arena/constants.py | 修改 | 新增 DEFAULT_MAP_NAME |
-
-### Vec3 修复
-
-JSON 中 position 为 list `[0, 0, -24]`，Ursina 的 `Vec3` 不接受单个 list 参数，需 `Vec3(*position)` 解包。
-
----
-
-## P2: AI 纯计算重构 ✅ 已完成
-
-### 改动
-
-| 文件 | 说明 |
-|------|------|
-| arena/ai_ctrl.py | 改为返回决策字典，添加 `forward_from_rotation()`, `dist_3d()` 纯函数 |
-| arena/game_manager.py | 新增 `_apply_ai_command(player, cmd)` 统一应用 AI 决策 |
-
-### AI 决策字典
-
-```python
-{
-    'look_at': (target_x, target_z),    # 朝向目标坐标
-    'rotate_y': float,                   # 旋转增量（碰撞回避时使用）
-    'move_fwd': float,                   # -1..1 前进量
-    'request_raycast': bool,             # 是否需要 raycast
-    'shoot_dir': (dx, dy, dz) | None,   # 射击方向+散布
-}
-```
-
-### _apply_ai_command 统一应用
-
-```python
-if 'look_at' in cmd:
-    player.look_at_2d(Vec3(tx, player.y, tz), 'y')
-if 'rotate_y' in cmd:
-    player.rotation_y += cmd['rotate_y']
-if cmd.get('move_fwd'):
-    # raycast + 移动
-if cmd.get('shoot_dir'):
-    player.weapon.shoot(Vec3(dx, dy, dz))
-```
-
----
-
-## P3: AI 独立进程 ✅ 已完成
-
-### 架构
-
-```
-主进程                              AI 子进程
-┌──────────────────┐               ┌──────────────────┐
-│ GameManager      │               │ AIDecider         │
-│   │              │   SharedMemory │   │               │
-│   ├── write ─────┼──────────────→│   ├── read        │
-│   │  PlayerInput │               │   │  PlayerInput   │
-│   │              │               │   │                │
-│   │←── read ─────┼───────────────│   ├── decide      │
-│   │  PlayerCmd   │               │   │                │
-│   │              │               │   └── write        │
-│   └── apply      │               │      PlayerCmd     │
-└──────────────────┘               └──────────────────┘
-```
-
-### 共享内存结构
-
-```python
-class PlayerInput(Structure):
-    player_id, team_id, state, pos_x/y/z, rotation_y, hp, spawn_x/z, ray_hit, ray_distance
-
-class PlayerCommand(Structure):
-    look_at_x/z, rotate_y, move_fwd, request_raycast, shoot_dir_x/y/z, avoiding, avoid_direction
-
-class SharedGameState(Structure):
-    running, frame_number, ai_frame_done, players[4], player_count, commands[4], dt
-```
-
-### 双模式切换
-
-```python
-# constants.py
-AI_USE_SUBPROCESS = False  # True=独立进程, False=主线程
-AI_SUBPROCESS_TIMEOUT = 0.005
-```
-
-### 文件清单
-
-| 文件 | 说明 |
-|------|------|
-| arena/shared_state.py | ctypes 结构定义 + AIDecider（纯 Python，无 Ursina） |
-| arena/ai_worker.py | 子进程入口 `ai_process_main(shm_name)` |
-| arena/ai_process.py | AIProcessManager：start/stop/read/write |
-
-### AIDecider（纯 Python AI）
-
-- 不依赖 Ursina，可独立运行于子进程
-- 读取 PlayerInput → 状态机决策 → 写入 PlayerCommand
-- 使用 `forward_from_rotation()` 和 `dist_3d()` 纯函数计算朝向和距离
-
----
-
-## 单元测试 ✅ 已完成
-
-### 测试分层
-
-```
-Layer 1: 纯逻辑（无依赖）  ← 大量，最快
-Layer 2: Mock Entity/time   ← 中量
-Layer 3: 集成（需 Ursina）  ← 少量
-```
-
-### 测试文件
+## 2.4 单元测试
 
 | 文件 | 层 | 测试数 | 覆盖模块 |
 |------|-----|--------|----------|
@@ -465,16 +392,15 @@ Layer 3: 集成（需 Ursina）  ← 少量
 | test_input_manager.py | L1 | 17 | merge_inputs, parse_gamepad_state |
 | test_score_system.py | L2 | 7 | TeamScoreSystem |
 | test_match_timer.py | L2 | 8 | MatchTimer |
-| test_ai_ctrl.py | L1+2 | 20 | forward_from_rotation, dist_3d, AIController |
-| test_shared_state.py | L1 | 21 | 结构读写, AIDecider, dict_to_command |
+| test_ai_ctrl.py | L1+2 | 20+ | forward_from_rotation, dist_3d, AIController |
 
 ---
 
-# 4. FPS Demo 设计参考
+# 3. FPS Demo 设计参考
 
 > 以下内容来自 `fps_demo_v4.py` 的设计分析，为项目演进提供参考。
 
-## 4.1 实体子弹系统
+## 3.1 实体子弹系统
 
 原始 fps_demo 使用射线检测（`mouse.hovered_entity`）实现即时命中。升级为实体子弹后：
 
@@ -489,7 +415,7 @@ Layer 3: 集成（需 Ursina）  ← 少量
 - LOD（远距离低模）
 - 实例化渲染
 
-## 4.2 第三人称视角
+## 3.2 第三人称视角
 
 ### 相机跟随
 
@@ -517,7 +443,7 @@ return (target_point - gun.world_position).normalized()
 
 配合地面准星（投射到玩家前方地面）提供朝向反馈。
 
-## 4.3 武器扩展方向
+## 3.3 武器扩展方向
 
 | 武器 | 伤害 | 射速 | 子弹速度 | 特殊 |
 |------|------|------|---------|------|
@@ -528,9 +454,9 @@ return (target_point - gun.world_position).normalized()
 
 ---
 
-# 5. Ursina 引擎架构与参考
+# 4. Ursina 引擎架构与参考
 
-## 5.1 架构概览
+## 4.1 架构概览
 
 Ursina 是基于 Python 的轻量级 3D 游戏引擎，底层封装 Panda3D。
 
@@ -540,7 +466,7 @@ Ursina 是基于 Python 的轻量级 3D 游戏引擎，底层封装 Panda3D。
 - **Python 原生**: 无需额外语言
 - **单例模式**: camera, mouse, scene, window 等全局唯一
 
-## 5.2 核心模块
+## 4.2 核心模块
 
 | 模块 | 职责 |
 |------|------|
@@ -562,7 +488,7 @@ Ursina 是基于 Python 的轻量级 3D 游戏引擎，底层封装 Panda3D。
 | sequence.py | 序列和动画系统 |
 | curve.py | 缓动曲线 |
 
-## 5.3 主循环流程
+## 4.3 主循环流程
 
 ```
 每帧执行:
@@ -578,7 +504,7 @@ Ursina 是基于 Python 的轻量级 3D 游戏引擎，底层封装 Panda3D。
 8. 更新音频
 ```
 
-## 5.4 Entity 核心属性
+## 4.4 Entity 核心属性
 
 ```python
 # 变换
@@ -604,7 +530,7 @@ on_disable()       # 禁用时
 on_destroy()       # 销毁时
 ```
 
-## 5.5 坐标系
+## 4.5 坐标系
 
 ```
     y (up)
@@ -616,7 +542,7 @@ on_destroy()       # 销毁时
 
 UI 坐标系：中心 (0,0)，范围 (-0.5 到 0.5)
 
-## 5.6 碰撞检测
+## 4.6 碰撞检测
 
 ```python
 # raycast
@@ -632,7 +558,7 @@ if player.intersects(trigger_box).hit: ...
 
 碰撞器类型：`'box'`（最快）→ `'sphere'` → `'mesh'`（最慢）
 
-## 5.7 关键 API 速查
+## 4.7 关键 API 速查
 
 ```python
 # 动画
@@ -661,7 +587,7 @@ time.dt                # 帧时间
 application.paused     # 暂停状态
 ```
 
-## 5.8 设计模式
+## 4.8 设计模式
 
 1. **单例模式**: Ursina, camera, mouse, scene, window
 2. **实体组件系统**: Entity + collider/scripts 组件
@@ -669,7 +595,7 @@ application.paused     # 暂停状态
 4. **工厂模式**: load_model(), load_texture()
 5. **策略模式**: 不同 collider 类型、shader 实现
 
-## 5.9 安装
+## 4.9 安装
 
 ```bash
 pip install ursina
@@ -677,7 +603,7 @@ pip install ursina
 pip install https://github.com/pokepetter/ursina/archive/master.zip
 ```
 
-## 5.10 参考资料
+## 4.10 参考资料
 
 - 官方文档: https://www.ursinaengine.org/documentation.html
 - API 参考: https://www.ursinaengine.org/api_reference.html
@@ -685,156 +611,19 @@ pip install https://github.com/pokepetter/ursina/archive/master.zip
 
 ---
 
-# 6. 新游戏规则设计
+# 5. AI 避障绕行设计
 
-## 6.1 规则变更概要
-
-| # | 旧规则 | 新规则 |
-|---|--------|--------|
-| 1 | 击杀敌方 +3 分 | 击杀 +3 分（可配），核心得分来自 Goal 占领 |
-| 2 | 无限弹药 | 每人 10 发子弹，仅本方基地可装填 |
-| 3 | 子弹伤害 10，射程 100 | 子弹伤害 30（3倍），射程 5，半径 0.3（3倍） |
-| 4 | 12 个掩体 | 4 个对称掩体 |
-| 5 | 无目标物件 | 4 个 Goal 圆柱，7 次击中统计占领，每个 10 分 |
-
-**游戏目标**：占领地图上的 4 个 Goal 圆柱。比赛结束时总分（击杀分 + Goal 分）高者获胜。
-
-## 6.2 Goal 圆柱实体
-
-```python
-class Goal(Entity):
-    goal_id          # 1-4
-    hit_history      # 最近 N 次命中的 Team 记录（FIFO, 窗口 7）
-    owner            # 当前占领方 Team / None
-
-    def on_bullet_hit(team):    # 子弹命中时调用
-    def _update_owner():        # 根据 hit_history 统计占领方
-    def _update_visual():       # 颜色随占领方变化
-```
-
-- `collider='sphere'`：被 raycast 命中
-- 占领方变化时通过 `game_manager.on_goal_owner_changed()` 通知比分系统
-- 命中闪白反馈
-
-## 6.3 AI 行为重构（6 状态机）
-
-```
-            ┌─────────────────────────────────────┐
-            │         弹药 == 0？                   │
-            │            ↓ 是                      │
-            │        ┌─────────┐                   │
-            │        │ reload  │ ← 回基地装填       │
-            │        └─────────┘                   │
-            │            ↓ 装填完成                 │
-            ├─────────────────────────────────────┤
-            │   有可见 Goal 且在射程内？             │
-            │            ↓ 是                      │
-            │        ┌─────────┐                   │
-            │        │shoot_goal│ ← 射击 Goal       │
-            │        └─────────┘                   │
-            ├─────────────────────────────────────┤
-            │   有可见敌人？                        │
-            │       ↓ 近距离       ↓ 远距离         │
-            │   ┌─────────┐   ┌─────────┐          │
-            │   │ attack  │   │ chase   │          │
-            │   └─────────┘   └─────────┘          │
-            ├─────────────────────────────────────┤
-            │   无目标？                           │
-            │       ↓                             │
-            │   ┌─────────┐                        │
-            │   │ patrol  │ ← 优先前往未占领 Goal   │
-            │   └─────────┘                        │
-            └─────────────────────────────────────┘
-```
-
-### AI 行为优先级
-
-| 优先级 | 状态 | 触发条件 | 行为 |
-|--------|------|----------|------|
-| 1 | navigate | 前方碰撞 | 绕行至 waypoint |
-| 2 | reload | `current_ammo == 0` | 回基地装填 |
-| 3 | shoot_goal | 可见未占领/敌方 Goal 在射程 0.9 倍内 | 射击 Goal（散布减半） |
-| 4 | attack | 可见敌人在 `attack_range` 内 | 射击敌人 + 侧步走位 |
-| 5 | chase | 可见敌人在 `detection_range` 内 | 追击敌人 |
-| 6 | patrol | 无目标 | 前往未占领 Goal 巡逻 |
-
-### 同队 Goal 射击协调
-
-AI 通过 `current_target_goal_id` 属性避免同队多人射击同一 Goal：
-
-```python
-# 射击 Goal 时设置
-self.current_target_goal_id = goal.goal_id
-
-# 寻找可射击 Goal 时，跳过队友已锁定的 Goal
-teammate_target_ids = {p.controller.current_target_goal_id
-                       for p in players
-                       if same_team and has_target}
-# 若所有 Goal 均被锁定，回退射击任意 Goal
-```
-
-### Goal 射击范围限制
-
-Goal 射击仅在子弹射程 90% 内开火，节省弹药：
-```python
-if d > Config.BULLET_MAX_DISTANCE * 0.9:
-    continue  # 超出射程，不开火
-```
-
-## 6.4 核心交互流程
-
-### 弹药流程
-
-```
-玩家射击 → weapon.current_ammo -= 1
-    ↓
-current_ammo == 0 → weapon.shoot() 直接 return
-    ↓
-玩家进入本方基地范围 → player._check_base_reload() → weapon.reload()
-    ↓
-sound_manager.play_reload()
-```
-
-### Goal 占领流程
-
-```
-子弹命中 Goal → goal.on_bullet_hit(team)
-    ↓
-hit_history.append(team)，超 7 个则 pop(0)
-    ↓
-_update_owner()：统计红蓝命中次数，多者占领
-    ↓
-占领方变化 → game_manager.on_goal_owner_changed()
-    ↓
-score_system.update_from_goals(goals) → HUD 比分实时更新
-```
-
-### 比赛结算流程
-
-```
-倒计时归零 → game_manager.end_match()
-    ↓
-red_score = score_system.get_score(Team.RED)  # 含击杀分 + Goal 分
-blue_score = score_system.get_score(Team.BLUE)
-    ↓
-判定胜负 → 显示结果 UI
-```
-
----
-
-# 7. AI 避障绕行设计
-
-## 7.1 问题描述
+## 5.1 问题描述
 
 AI 前进过程中遇到 cover 等障碍物时不会绕行，会卡在 cover 上。
 
-## 7.2 卡住的 3 个根本原因
+## 5.2 卡住的 3 个根本原因
 
 1. **随机方向回避**：50% 概率转向更深的死角
 2. **回避时间固定 1 秒**：不够绕过，结束后又撞同一障碍
 3. **回避后重新朝目标**：`look_at` 重新指向目标 → 又朝障碍物走去 → 无限循环
 
-## 7.3 解决方案：Waypoint Navigation
+## 5.3 解决方案：Waypoint Navigation
 
 碰撞后不盲目旋转，而是计算障碍物侧方的绕行路径点，AI 先走到 waypoint 再恢复朝目标前进。
 
@@ -863,7 +652,7 @@ _navigate() 每帧检测:
   前方又碰撞？→ 重新计算 waypoint
 ```
 
-## 7.4 关键修复点
+## 5.4 关键修复点
 
 | 问题 | 修复 |
 |------|------|
@@ -872,7 +661,7 @@ _navigate() 每帧检测:
 | detour_dist=2.5 太近 cover 边缘 | 改为 3.5（cover 半宽 1 + 安全边距 2.5） |
 | 连续卡住方向不变 | `nav_stuck_count >= 2` 时翻转绕行方向 |
 
-## 7.5 相关配置
+## 5.5 相关配置
 
 | 配置 | 说明 | 默认值 |
 |------|------|--------|
@@ -880,13 +669,13 @@ _navigate() 每帧检测:
 
 ---
 
-# 8. 声音系统升级设计
+# 6. 声音系统升级设计
 
-## 8.1 方案选择
+## 6.1 方案选择
 
 采用 MP3 音效素材方案替代 ursfx 合成音。核心原因：ursfx 合成音听起来像噪声，换成真实音效素材后辨识度天然高，且代码大幅简化。
 
-## 8.2 SoundManager 集中管理
+## 6.2 SoundManager 集中管理
 
 ```python
 class SoundManager:
@@ -906,7 +695,7 @@ class SoundManager:
     def play_match_end()
 ```
 
-## 8.3 AI 射击音效优化
+## 6.3 AI 射击音效优化
 
 | 距离 | 行为 | 音量比例 |
 |------|------|----------|
@@ -916,7 +705,7 @@ class SoundManager:
 
 AI 射击音效限流：每个 AI 最小间隔 0.3 秒。
 
-## 8.4 音效素材清单
+## 6.4 音效素材清单
 
 | 事件 | 文件名 | 音量 | pitch 范围 |
 |------|--------|------|-----------|
@@ -931,7 +720,7 @@ AI 射击音效限流：每个 AI 最小间隔 0.3 秒。
 | 比赛开始 | match_start | 0.35 | [1.0, 1.0] |
 | 比赛结束 | match_end | 0.35 | [1.0, 1.0] |
 
-## 8.5 效果对比
+## 6.5 效果对比
 
 | | 改造前 | 改造后 |
 |---|--------|--------|
@@ -942,15 +731,15 @@ AI 射击音效限流：每个 AI 最小间隔 0.3 秒。
 
 ---
 
-# 9. 蓝方相机视角对称修复
+# 7. 蓝方相机视角对称修复
 
-## 9.1 问题
+## 7.1 问题
 
 当玩家选择蓝方角色时，相机位置和朝向与红方相同，没有沿 z 轴对称。
 
 红方 base 在 z=-17，初始面朝 +z；蓝方 base 在 z=17，初始面朝 -z。相机应在玩家身后跟随，但所有偏移量 z 分量的正负号都是硬编码的。
 
-## 9.2 修复方案
+## 7.2 修复方案
 
 `CameraController.__init__` 中根据队伍计算 `z_sign`：
 
@@ -967,7 +756,7 @@ self.z_sign = 1 if self.target.team == Team.RED else -1
 
 同时在 `look_at` 后添加 `camera.rotation_z = 0` 修正 roll 旋转。
 
-## 9.3 蓝方初始朝向
+## 7.3 蓝方初始朝向
 
 蓝方玩家创建时 `rotation_y=180`，重生时同样设置：
 
@@ -979,9 +768,55 @@ Player(team=Team.BLUE, ..., rotation_y=180)
 self.rotation_y = 180 if self.team == Team.BLUE else 0
 ```
 
-## 9.4 效果验证
+## 7.4 效果验证
 
 | 队伍 | z_sign | 相机位置偏移 z | 看向偏移 z | 效果 |
 |------|--------|---------------|-----------|------|
 | RED  | +1     | -distance     | +10       | 相机在身后，看向前方（+z） |
 | BLUE | -1     | +distance     | -10       | 相机在身后，看向前方（-z） |
+
+---
+
+# 8. 性能优化与防卡顿
+
+## 8.1 GPU/音频资源预热
+
+AI 首次射击时出现渲染卡顿，原因是 Ursina(Panda3D) 首次创建某类 model/collider/Audio 时需要加载资源到 GPU/音频缓冲。
+
+### 冷启动项
+
+| 资源 | 代码位置 | 原因 |
+|------|---------|------|
+| `model='sphere'` | `bullet.py` | 场景中首次出现 sphere 模型，需生成网格并上传 GPU |
+| `collider='sphere'` | `bullet.py` | 首次注册球体碰撞形状到 BulletPhysics |
+| `Audio(shoot.mp3)` | `sound_manager.py` | 首次解码 MP3 到音频缓冲区 |
+
+### 预热方案
+
+`GameManager._warmup_assets()` 在 `start_match()` 倒计时前调用：
+
+1. 预创建 `model='sphere'` + `collider='sphere'` 的 Entity 后立即 `destroy()`
+2. 预创建粒子动画 Entity 并延迟销毁（预热 `animate_position`/`animate_scale`）
+3. 播放一次射击音效和命中音效（预热 MP3 解码缓冲区）
+4. 所有临时实体放在 `y=-100` 不可见处
+
+之后正式射击时资源已缓存，不再卡顿。
+
+## 8.2 子弹隔帧 raycast
+
+所有子弹共享 `_global_frame` 计数器，每 2 帧做一次 raycast：
+
+- `_global_frame % 2 == 0` 时执行碰撞检测，raycast 距离 × 2 补偿跳过帧
+- 中间帧只做位移，不检测碰撞
+- 减少 50% 的 raycast 调用
+
+## 8.3 HUD 更新节流
+
+| 元素 | 更新频率 | 优化方式 |
+|------|---------|---------|
+| 地面准星 | 每帧 | lerp 平滑插值（不可跳过） |
+| 血条/战绩/弹药 | 每 3 帧 | 脏检查 + 字符串比较 |
+
+## 8.4 AI 决策帧节流
+
+每 3 帧完整决策 1 次，3 个 AI 偏移错开（offset 0/1/2），避免同步决策。绕行状态每 2 帧决策保证响应性。

@@ -93,9 +93,54 @@ class GameManager(Entity):
         self.score_system.reset()
         self.timer.reset()
 
+        # 预热 GPU/音频资源（避免首次射击时卡顿）
+        self._warmup_assets()
+
         # 开始倒计时
         self.state = GameState.COUNTDOWN
         self._countdown(3)
+
+    @staticmethod
+    def _warmup_assets():
+        """预热 GPU/音频资源，避免首次射击时的渲染卡顿
+
+        Ursina(Panda3D) 在首次创建某类 model/collider/Audio 时需要
+        加载资源到 GPU/音频缓冲，造成帧卡顿。通过预创建并立即销毁来
+        强制提前完成资源加载。
+        """
+        # 预热子弹模型（sphere）+ 碰撞体（sphere collider）
+        # 使用原始 Entity 而非 Bullet 类，避免 update() 被调用时 owner=None 崩溃
+        dummy = Entity(
+            model='sphere',
+            scale=0.3,
+            color=color.yellow,
+            position=Vec3(0, -100, 0),
+            collider='sphere',
+        )
+        destroy(dummy)
+
+        # 预热命中粒子特效（animate 首次调用也有开销）
+        particle = Entity(
+            model='cube',
+            scale=0.05,
+            color=color.orange,
+            position=Vec3(0, -100, 0),
+        )
+        particle.animate_position(Vec3(0, -99.5, 0), duration=0.3)
+        particle.animate_scale(0, duration=0.3)
+        destroy(particle, delay=0.35)
+
+        # 预热射击音效（首次 Audio() 会解码 MP3 到缓冲区）
+        from arena.sound_manager import sound_manager
+        sound_manager.play_shoot(
+            shooter_pos=Vec3(0, -100, 0),
+            listener_pos=Vec3(0, -100, 0),
+            is_ai=True,
+            player_id=0,
+        )
+
+        # 预热命中音效
+        sound_manager.play_hit_wall()
 
     def _countdown(self, seconds):
         """倒计时"""
