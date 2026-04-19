@@ -294,6 +294,9 @@ class GameManager(Entity):
             if self.human_player and self._hud_counter % 3 == 0:
                 hud.update_player_info(self.human_player)
 
+    # 同队AI最小间距（小于此值时推开，防止 collider 重叠导致物理抖动/卡住）
+    _TEAMMATE_MIN_DIST = 2.0
+
     @staticmethod
     def _apply_ai_command(player, cmd):
         """将 AI 决策字典应用到玩家实体"""
@@ -313,6 +316,10 @@ class GameManager(Entity):
                 move_ignore = [player]
                 if game_manager.game_map:
                     move_ignore.extend(game_manager.game_map.goals)
+                # 排除队友，避免同队AI互相阻挡卡住
+                for p in game_manager.players:
+                    if p != player and p.team == player.team:
+                        move_ignore.append(p)
                 ray = raycast(player.position, player.forward,
                               distance=move_distance, ignore=move_ignore, debug=False)
                 if ray.hit:
@@ -325,9 +332,29 @@ class GameManager(Entity):
                     return  # 不移动
             player.position += player.forward * move_distance
 
+        # 同队AI分离：防止 collider 重叠导致物理引擎推挤抖动
+        GameManager._separate_teammates(player)
+
         if cmd.get('shoot_dir'):
             dx, dy, dz = cmd['shoot_dir']
             player.weapon.shoot(Vec3(dx, dy, dz))
+
+    @staticmethod
+    def _separate_teammates(player):
+        """如果与同队队友距离过近，主动推开，避免 box collider 重叠引发物理抖动"""
+        min_dist = GameManager._TEAMMATE_MIN_DIST
+        my_xz = Vec3(player.x, 0, player.z)
+        for p in game_manager.players:
+            if p == player or p.team != player.team:
+                continue
+            other_xz = Vec3(p.x, 0, p.z)
+            diff = my_xz - other_xz
+            d = diff.length()
+            if 0.01 < d < min_dist:
+                # 沿分离方向推开到 min_dist
+                push = diff.normalized() * (min_dist - d) * 0.5
+                player.x += push.x
+                player.z += push.z
 
 
 # 全局 GameManager 实例

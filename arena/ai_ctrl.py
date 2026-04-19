@@ -181,9 +181,13 @@ class AIController:
                 if has_los:
                     score *= Config.AI_SHOOTABLE_GOAL_MULT
 
-            # 队友已锁定该Goal → 降权
+            # 队友已锁定该Goal → 降权（距Goal越近降权越狠，防止两人挤同一Goal）
             if goal.goal_id in teammate_goal_ids:
-                score *= Config.AI_TEAMMATE_TARGET_PENALTY
+                penalty = Config.AI_TEAMMATE_TARGET_PENALTY
+                # 距离Goal越近，队友冲突概率越高，加大降权
+                if d < Config.AI_ATTACK_RANGE:
+                    penalty *= 0.2
+                score *= penalty
 
             candidates.append((score, 'goal', goal, has_los))
 
@@ -260,6 +264,24 @@ class AIController:
             if pid is not None:
                 player_ids.add(pid)
         return goal_ids, player_ids
+
+    def _compute_teammate_separation(self, min_dist=4.0):
+        """计算与队友的分离力（避免挤在一起）
+
+        Returns:
+            float | None — 旋转增量，或 None（无需分离）
+        """
+        from arena.game_manager import game_manager
+        my_pos = (self.player.x, 0, self.player.z)
+        for p in game_manager.players:
+            if p == self.player or p.team != self.player.team:
+                continue
+            d = dist_3d(my_pos, (p.x, 0, p.z))
+            if d < min_dist and d > 0.1:
+                # 队友太近 → 侧移（方向基于 player_id 奇偶，保证两人反向分开）
+                sign = 1 if self.player.player_id % 2 == 0 else -1
+                return sign * self.rotation_speed * 0.4 / 60
+        return None
 
     # ==================== 绕行导航 ====================
 
@@ -416,6 +438,9 @@ class AIController:
 
     # ==================== Goal 射击 ====================
 
+    # shoot_goal 时与 Goal 保持的最小距离（避免多个AI挤在同一Goal）
+    _GOAL_MIN_STAND_DIST = 6.0
+
     def _shoot_goal(self, goal, los_confirmed=False):
         """射击 Goal"""
         self.state = 'shoot_goal'
@@ -426,7 +451,13 @@ class AIController:
         d = dist_3d(my_pos, goal_pos)
 
         # 距离够近就停步，避免撞上 Goal 实体引发反复绕行
-        move_fwd = 0.3 if d > Config.AI_PATROL_ARRIVE_DISTANCE else 0.0
+        # 同时保持最小距离 _GOAL_MIN_STAND_DIST，防止多个AI挤在同一Goal
+        if d <= self._GOAL_MIN_STAND_DIST:
+            move_fwd = 0.0
+        elif d > Config.AI_PATROL_ARRIVE_DISTANCE:
+            move_fwd = 0.3
+        else:
+            move_fwd = 0.0
 
         result = {
             'look_at': (goal.position.x, goal.position.z),
@@ -434,6 +465,11 @@ class AIController:
             'request_raycast': False,
             'shoot_dir': None,
         }
+
+        # 队友分离：如果队友也在射击同一Goal且距离过近，添加侧移
+        separation = self._compute_teammate_separation()
+        if separation:
+            result['rotate_y'] = separation
 
         # 射程检查：超出子弹射程不开火，节约弹药
         goal_pos = (goal.position.x, goal.position.y, goal.position.z)
